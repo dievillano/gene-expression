@@ -8,6 +8,7 @@ book:
   chapters:
     - index.qmd
     - intro.qmd
+    - methods.qmd
     - summary.qmd
     - references.qmd
 
@@ -20,6 +21,8 @@ format:
       - brand
   pdf:
     documentclass: scrreprt
+    
+number-sections: true
 
 
 

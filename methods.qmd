@@ -1,0 +1,77 @@
+# Methods
+
+## Experimental design and data 
+
+```{r}
+#| echo: false
+labels <- c(
+  "S1, S2, S3", "S4, S5, S6", "S7, S8, S9", "S10, S11, S12", "S13, S14, S15",
+  "S16, S17, S18", "S19, S20, S21", "S22, S23, S24", "S25, S26, S27", 
+  "S28, S29, S30"
+)
+conditions <- c("Y_30", "Y", "YC", "YE", "YCE")
+strains <- c("WT", "FL")
+
+label_matrix <- matrix(
+  labels, nrow = 2, byrow = TRUE, dimnames = list(strains, conditions)
+)
+
+df <- tibble::as_tibble(label_matrix, rownames = "strain")
+```
+
+```{r}
+#| echo: false
+library(gt)
+```
+
+```{r}
+#| echo: false
+#| label: "tbl-01"
+#| tbl-cap: "Overview of the experimental design showing the combinations of temperature and growth media (environmental conditions) used to grow cells of the WT and FLC1Δ (FL) strains. Each cell lists the replicate sample labels (S1–S30) corresponding to each unique experimental condition."
+df |>
+  gt() |>
+  tab_spanner(label = md("**37°C**"), columns = c("Y", "YC", "YE", "YCE")) |>
+  tab_spanner(label = md("**30°C**"), columns = "Y_30") |>
+  tab_spanner(label = md("**Enviromental conditions**"), columns = -strain) |>
+  cols_label(
+    strain = md("**Strain**"),
+    Y_30 = md("**Y**"),
+    Y = md("**Y**"),
+    YC = md("**YC**"),
+    YE = md("**YE**"),
+    YCE = md("**YCE**")
+  ) |> 
+  cols_align(align = "center") |> 
+  tab_options(table.font.size = 10, table.width = "80%", table.align = "center")
+```
+
+```{r}
+#| echo: false
+counts_raw <- readr::read_delim(
+  "data/GSE292021_counts_quantseq_CryptoRNAseqFLC1.txt", delim = "\t",
+  col_types = paste0(c("ciiici", rep("i", 30)), collapse = "")
+)
+colnames(counts_raw)[1:6] <- c(
+  "gene_id", "chr", "start", "end", "strand", "length"
+)
+```
+
+The study involved culturing cells from both the wild-type (WT) and FLC1Δ mutant strains under various environmental conditions. Cells were grown in four different media: YPD (Y), YPD with CFW (YC), YPD with EGTA (YE), and YPD with both CFW and EGTA (YCE), all at 37°C to induce stress. Additionally, both strains were grown under baseline conditions in standard YPD at 30°C. In total, 10 distinct experimental conditions were tested (5 environmental conditions × 2 strains), each with 3 biological replicates, resulting in 30 samples. 
+
+@tbl-01 presents the experimental design along with the sample labels for each condition. The 10 experimental conditions are labeled by combining the levels of the three experimental factors: strain, temperature, and growth media, in that order. We use the label FL to denote the FLC1Δ strain. For example, the condition involving the wild-type strain grown in YCE medium at 37°C is labeled WT-37-YCE, while the corresponding condition for the FLC1Δ strain is labeled FL-37-YCE.
+
+The primary output of the experiment was a raw count matrix containing RNA abundance measurements for `r dim(counts_raw)[1]` genes across 30 samples, resulting in a `r dim(counts_raw)[1]` × 30 matrix. Each entry in the matrix represents the number of sequencing reads mapped to a specific gene in a given sample. 
+
+## Pre-filtering
+
+Some genes may exhibit low or zero counts across all samples, suggesting they are not expressed under the experimental conditions. These genes are unlikely to be identified as differentially expressed and are typically filtered out prior to analysis. The biological justification for pre-filtering low count or uninformative genes is that a gene typically needs to be expressed above a minimal threshold to be translated into a functional protein or to exert a meaningful biological effect [@chen2016from]. Moreover, low-expression genes often reflect sampling noise rather than true biological signal [@sha2015effect].
+
+DE analysis involves performing a hypothesis test for each gene to evaluate whether expression levels differ between experimental conditions (see @sec-de). This results in a multiple testing problem, which is typically addressed by adjusting p-values to control the false discovery rate (FDR). However, such corrections reduce statistical power by raising the threshold for significance. As the number of tests increases, this loss of power aggravates, further limiting the ability to detect truly differentially expressed (DE) genes, especially when they represent a small proportion of the total set [@bourgon2010independent]. To mitigate this, it is recommended to filter out low-expression genes prior to DE analysis, thereby reducing the total number of hypotheses. This makes the multiple testing correction less stringent and increases the chance of correctly identifying DE genes [@bourgon2010independent; @sha2015effect].
+
+## Data transformation
+
+## Exploratory analysis
+
+## Differential expression analysis {#sec-de}
+
+## Motif enrichment analysis

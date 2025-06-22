@@ -1,4 +1,6 @@
 # References {.unnumbered}
 
+`r dim(counts_raw)[1]`
+
 ::: {#refs}
 :::
