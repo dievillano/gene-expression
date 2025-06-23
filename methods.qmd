@@ -1,6 +1,6 @@
 # Methods
 
-## Experimental design and data 
+## Experimental design and data {#sec-data}
 
 ```{r}
 #| echo: false
@@ -62,16 +62,51 @@ The study involved culturing cells from both the wild-type (WT) and FLC1Δ mutan
 
 The primary output of the experiment was a raw count matrix containing RNA abundance measurements for `r dim(counts_raw)[1]` genes across 30 samples, resulting in a `r dim(counts_raw)[1]` × 30 matrix. Each entry in the matrix represents the number of sequencing reads mapped to a specific gene in a given sample. 
 
-## Pre-filtering
+## Pre-filtering {#sec-fil}
 
 Some genes may exhibit low or zero counts across all samples, suggesting they are not expressed under the experimental conditions. These genes are unlikely to be identified as differentially expressed and are typically filtered out prior to analysis. The biological justification for pre-filtering low count or uninformative genes is that a gene typically needs to be expressed above a minimal threshold to be translated into a functional protein or to exert a meaningful biological effect [@chen2016from]. Moreover, low-expression genes often reflect sampling noise rather than true biological signal [@sha2015effect].
 
 DE analysis involves performing a hypothesis test for each gene to evaluate whether expression levels differ between experimental conditions (see @sec-de). This results in a multiple testing problem, which is typically addressed by adjusting p-values to control the false discovery rate (FDR). However, such corrections reduce statistical power by raising the threshold for significance. As the number of tests increases, this loss of power aggravates, further limiting the ability to detect truly differentially expressed (DE) genes, especially when they represent a small proportion of the total set [@bourgon2010independent]. To mitigate this, it is recommended to filter out low-expression genes prior to DE analysis, thereby reducing the total number of hypotheses. This makes the multiple testing correction less stringent and increases the chance of correctly identifying DE genes [@bourgon2010independent; @sha2015effect].
 
-## Data transformation
+Although the software used for differential expression (DE) analysis includes an internal filtering routine (see @sec-de), additional pre-filtering was applied using an empirical method implemented in the R package `edgeR` [@chen2025edgeR], as described in @chen2016from. This method retains genes whose counts-per-million (CPM) exceed a specified threshold $k$ in at least $n$ samples. The CPM for each gene in a sample is calculated by dividing the raw read count by the total number of reads (i.e., the library size) in that sample and scaling by one million.
 
-## Exploratory analysis
+To determine the CPM threshold $k$, the user specifies a minimum raw count that a gene must meet in $n$ samples, and the software computes the corresponding CPM based on the smallest library size. For this study, we required a minimum count of 10 in at least 3 samples, corresponding to the number of replicates per condition. The original, unfiltered count matrix was retained to replicate the DE analysis and compare results.
+
+## Normalization and transformation of raw counts {#sec-norm}
+
+In RNA-seq experiments, the number of reads mapped to a gene depends not only its expression level but also on between-sample and within-sample factors that make the row counts not directly comparable across genes or samples [@gierlinski2015statistical]. Between-sample variation primarily arises from differences in library size, with larger library sizes producing more reads across all genes in a sample, whereas within-sample variation occurs at a gene level and can be influenced by gene length or by the proportion of guanine (G) and cytosine (C) nucleotides in the genes [GC-content, @dillies2012a]. 
+
+A common approach to correct for between-sample variation is total count normalization, in which raw counts are divided by the total number of reads (library size) for each sample and scaled by a constant factor. CPM is a typical example of this method. However, total count normalization can be problematic in DE analysis, as a small number of highly expressed genes can disproportionately inflate the library size. This can artificially lower the normalized expression of other genes within the same sample and exaggerate differences between samples, even when no real biological variation exists [@gierlinski2015statistical]. More robust normalization methods have been developed for DE analysis, such as the trimmed mean of M-values (TMM) method [@robinson2010scaling]. In this study, we employed the normalization procedure implemented in the R package `DESeq2` [@love2014moderated], which uses the median-of-ratios method to estimate sample-specific size factors for each gene count [@anders2010differential]. For comparison purposes, we also applied CPM normalization. No normalization to correct for within-sample variation (e.g., gene length or GC content) was applied, following the recommendation of the project advisor.
+
+An additional challenge in RNA-seq analysis arises during data visualization and multivariate techniques such as clustering or principal component analysis (PCA), which are sensitive to the scale of the variables being analyzed. Even after normalization, RNA-seq data often exhibit heteroskedasticity, where genes with higher expression levels tend to show greater variance across samples than low-expressed genes. As a result, these highly variable genes can disproportionately influence the analysis, potentially obscuring meaningful biological patterns [@love2014moderated]. A common solution is to apply a variance-stabilizing transformation (VST) to the raw or normalized counts, which aims to place lowly and highly expressed genes on a common scale [@hafemeister2019normalization]. 
+
+One of the most common VST is the logarithm (log) transformation. However, this transformation has the issue of exaggerating variability in low-count genes, where random noise tends to overshadow true biological signal [@love2014moderated]. In this study, we applied two transformations available in the `DESeq2` package: the regularized logarithm (rlog) transformation [@love2014moderated] and the VST proposed by @anders2010differential. The rlog transformation is closely related to the modeling framework used for differential expression analysis in `DESeq2` and will be described in more detail in @sec-de. The latter transformation, which we will refer to simply as VST, performs a monotonic transformation of the normalized counts so that the resulting variance is approximately independent of the mean. Both transformations were applied after normalizing the counts using the `DESeq2` method. To benchmark these transformations, we also applied a log transformation with base 2 to the CPM-normalized counts having previously added a prior count of 2 to the raw counts to avoid taking logarithm of zero (undefined).
+
+## Exploratory analysis {#seq-eda}
+
+An important first step in RNA-seq data analysis is assessing the quality and consistency of biological replicates. Ideally, replicates within the same experimental condition should exhibit similar expression profiles after normalization and transformation. To evaluate this, we computed both the correlation matrix and the pairwise distance matrix of the samples, using the Pearson correlation and the Euclidean distance, respectively. If the replicates are consistent, the correlation and distance matrices should reveal strong similarity among samples from the same condition and clear separation from those in different conditions. Prior to this analysis, the raw counts were normalized and transformed using the methods described in @sec-norm, resulting in three versions of the data: log-transformed CPM, rlog-transformed counts, and VST-transformed counts.
+
+To complement this analysis, a more visual approach to assess replicate quality is to project the samples into a lower-dimensional space and evaluate whether replicates from the same condition cluster together. We used PCA for this purpose. PCA decomposes the correlation matrix of the genes into uncorrelated components ordered by the variance they explain, which is quantified by their corresponding eigenvalues. To determine how many dimensions to retain, we applied Horn’s parallel analysis: this method compares the observed eigenvalues to those obtained from randomly generated uncorrelated data sets and retains components whose eigenvalues exceed the average from uncorrelated data sets [@dinno2009exploring]. We visualized the samples in all pairwise combinations of the retained components. Additionally, to explore which experimental conditions or factors might be driving the separation of samples in the PCA space, we created boxplots of the sample scores (i.e., coordinates) grouped by each experimental factor, allowing us to assess potential patterns or group separations.
+
+Furthermore, PCA also enables us to identify which genes are most strongly associated with each principal component by examining the loadings, which reflect the correlation between genes and components. For each pair of components, we generated loading plots highlighting the top 1% of genes based on the magnitude of their loadings, showing both the strength and direction of their contributions.
+
+Prior to all PCA-related analyses, we selected the top 10% most variable genes across samples since these genes are more likely to capture biological signal, whereas low-variance genes typically contribute little or are uninformative for the purpose of visualizing the trends in the data.
 
 ## Differential expression analysis {#sec-de}
+
+The DE analysis approach used in this study follows the methodology implemented in the `DESeq2` package. The core idea is to model the raw counts for each gene using a negative binomial (NB) distribution, where the logarithm of the normalized mean is modeled as a linear combination of coefficients corresponding to contrasts of experimental conditions. Hypothesis testing is then performed on these coefficients to assess whether the corresponding contrasts result in statistically significant differential expression for a given gene. In the remainder of this section, we briefly outline the key features of this modeling framework, as described by @love2014moderated.
+
+### Modelling gene expression
+
+Let $c_{ij}$ denote the observed raw count for gene $i$ in sample $j$. We assume that $c_ij$ has a NB distribution with mean $\mu_{ij}$ and gene-specific dispersion parameter $\alpha_i$; that is, $c_{ij} \sim NB(\mu_{ij}, \alpha_i)$. The mean $\mu_{ij}$ is modelled as the product of a sample-specific size factor $s_j$ and a normalized expression level $q_{ij}$, such that $\mu_{ij} = s_j q_{ij}$. The size factor $s_j$ is estimated using the median-of-ratios method, as mentioned in @sec-norm. The normalized expression level, $q_{ij}$, is modelled in this study as
+
+$$
+\begin{aligned}
+\text{log}(q_{ij}) &= \beta_{i0} + \beta_{i1}x^{(\text{FL})}_{j} + \beta_{i2}x^{(\text{YC})}_{j} + \beta_{i3}x^{(\text{YE})}_{j} + \beta_{i4}x^{(\text{YCE})}_{j} + \beta_{i5}x^{(\text{30})}_{j} + \\
+& \quad \quad \beta_{i6}x^{(\text{FL})}_{j}x^{(\text{YC})}_{j} + \beta_{i7}x^{(\text{FL})}_{j}x^{(\text{YE})}_{j} + \beta_{i8}x^{(\text{FL})}_{j}x^{(\text{YCE})}_{j} + \beta_{i9}x^{(\text{FL})}_{j}x^{(\text{30})}_{j},
+\end{aligned}
+$$
+
+where the intercept term $\beta_{i0}$ denotes the baseline expression level of gene $i$ under the reference condition. The coefficients $\beta_{i1}$ to $\beta_{i5}$ represent the main effects of the experimental factors: $x^{(\text{FL})}_{j}$ is an indicator variable for the FLC1Δ strain, with the WT strain serving as the reference level; $x^{(\text{YC})}_{j}$, $x^{(\text{YE})}_{j}$, and $x^{(\text{YCE})}_{j}$ are indicators for the different media conditions, with Y as the reference level; and $x^{(\text{30})}_{j}$ indicates the 30°C temperature condition, with 37°C as reference. Together, this implies that the reference experimental condition is WT-37-Y. The interaction terms $\beta_{i6}$ to $\beta_{i9}$ model how the effects of media and temperature differ under the presence or absence of the FLC1 gene. No interaction between media and temperature was included, as these factors are not fully crossed in the experimental design.
 
 ## Motif enrichment analysis
