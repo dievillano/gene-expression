@@ -9,8 +9,9 @@ book:
     - index.qmd
     - intro.qmd
     - methods.qmd
-    - summary.qmd
+    - results.qmd
     - references.qmd
+    - appendix.qmd
 
 bibliography: references.bib
 
@@ -21,8 +22,21 @@ format:
       - brand
   pdf:
     documentclass: scrreprt
+    include-in-header:
+      text: |
+       \usepackage[font=small, labelfont={bf,small}, format=plain]{caption}
     
 number-sections: true
 
+csl: vancouver.csl
+
+crossref:
+  custom:
+    - kind: float
+      key: suppfig
+      latex-env: suppfig
+      reference-prefix: Figure S
+      space-before-numbering: false
+      latex-list-of-description: Supplementary Figure
 
 

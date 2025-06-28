@@ -1,0 +1,111 @@
+---
+execute:
+  include: false
+---
+
+# Results
+
+```{r}
+library(dplyr)
+```
+
+```{r}
+gene_summary <- readr::read_csv("results/gene_summary.csv")
+```
+
+```{r}
+gene_total_range_raw <- range(gene_summary$total)/1e6
+gene_total_range <- c(
+  format(gene_total_range_raw[1], nsmall = 0),
+  format(gene_total_range_raw[2], digits = 2, nsmall = 2)
+)
+```
+
+```{r}
+gene_high_total <- gene_summary$gene[which.max(gene_summary$total)]
+```
+
+```{r}
+gene_zero_total <- dim(gene_summary[gene_summary$total == 0, ])[1]
+```
+
+```{r}
+sample_summary <- readr::read_csv("results/sample_summary.csv")
+```
+
+```{r}
+sample_total_range <- format(
+  range(sample_summary$total)/1e6, digits = 2, nsmall = 2
+)
+```
+
+```{r}
+sample_high_total <- as.character(
+  sample_summary$sample[which.max(sample_summary$total)]
+)
+```
+
+```{r}
+condition_sample_high_total <- as.character(
+  sample_summary$condition[which.max(sample_summary$total)]
+)
+```
+
+```{r}
+condition_summary <- sample_summary |> 
+  group_by(condition) |> 
+  summarise(total = sum(total), .groups = "drop")
+```
+
+```{r}
+condition_total_range <- format(
+  range(condition_summary$total)/1e6, digits = 2, nsmall = 2
+)
+```
+
+```{r}
+condition_high_total <- as.character(
+  condition_summary$condition[which.max(condition_summary$total)]
+)
+```
+
+Gene-wise total read counts ranged from `r gene_total_range[1]` to `r gene_total_range[2]` million, with gene `r gene_high_total` showing the highest total count across all samples. A total of `r gene_zero_total` out of `r dim(gene_summary)[1]` genes had zero total counts. Library sizes (i.e., total read counts per sample) ranged from `r sample_total_range[1]` to `r sample_total_range[2]` million, with sample `r sample_high_total` from condition `r condition_sample_high_total` having the largest library. At the condition level, `r condition_high_total` showed the highest total library size (`r condition_total_range[2]` million). A barplot of library sizes across samples is shown in @suppfig-libsize, highlighting variability across libraries and the need for normalisation prior to comparing expression levels.
+
+```{r}
+genes_keep <- readRDS("results/genes_keep.rds")
+```
+
+```{r}
+genes_keep_pctg <- format(100*sum(genes_keep)/dim(gene_summary)[1], digits = 2, nsmall = 2)
+```
+
+After pre-filtering, we retained `r sum(genes_keep)` genes (`r genes_keep_pctg`%), removing `r dim(gene_summary)[1] - sum(genes_keep)` genes and moderately reducing the multiple testing burden for DE analysis. We applied CPM normalisation and performed $\text{log}_2$-CPM, rlog, and VST transformations on the filtered count matrix, as described in @sec-norm. @suppfig-boxplots shows boxplots of expression values by sample and condition for each transformation. CPM alone does not stabilise variance, resulting in highly skewed distributions with many outliers. In contrast, $\text{log}_2$-CPM, rlog, and VST reduced skewness and improved centring, although outliers are still present. Among these, rlog and VST produce more uniform distributions across samples than the simple log transform, which has limitations discussed in @sec-norm. The effect of the transformations on variance stabilisation is illustrated in @suppfig-meansd, which plots gene-wise standard deviations against the rank of mean expression under each transformation. For CPM, the trend line (red) shows a pronounced peak at high expression levels, indicating greater variability. In contrast, the transformed data exhibit a much flatter trend, with standard deviations more uniform across the expression range, reflecting effective variance stabilisation.
+
+```{r}
+pca_results_comp <- readr::read_csv("results/pca_results_comp.csv")
+```
+
+```{r}
+pca_results_comp_filter <- filter(pca_results_comp, type == "filter")
+```
+
+```{r}
+pca_results_comp_filter_var <- format(
+  pca_results_comp_filter$var_explained, digits = 2, nsmall = 2
+)
+```
+
+PCA was performed on the transformed data, yielding an optimal number of three components for all methods except CPM, which retained only one. These components explained `r pca_results_comp_filter_var[2]`%, `r pca_results_comp_filter_var[3]`%, and `r pca_results_comp_filter_var[4]`% of the total variance for $\log_2$-CPM, rlog, and VST, respectively, while CPM explained only `r pca_results_comp_filter_var[1]`%. The scree plot for the rlog-transformed data, shown in @suppfig-scree, illustrates the retained components and their associated variance. @suppfig-pca displays the samples projected onto principal component axes 1 vs 2 and 2 vs 3, coloured by experimental condition, using the rlog-transformed data. Replicates of the same condition cluster closely, indicating good consistency and quality across replicates.
+
+@suppfig-pca-media shows the same plot but the samples coloured by the media condition, and we can observe, mostly in plot A, that samples with media Y and YC for different combinations of strain and temperature levels cluster together, and the same for samples with media YE and YCE. This indicates that the addition of CFW to the media have similar expression levels compared to without CFW for certain strain and temperature. 
+
+
+
+
+
+
+
+
+
+
+

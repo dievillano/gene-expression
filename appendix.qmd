@@ -1,0 +1,11 @@
+# Appendix {.unnumbered}
+
+![Library sizes.](figures/lib_sizes.pdf){#suppfig-libsize}
+
+![Boxplots.](figures/transformed_filter_boxplot.pdf){#suppfig-boxplots}
+
+![Mean-SD plot.](figures/meansd_plot.pdf){#suppfig-meansd}
+
+![Scree plot.](figures/screeplot_rlog.pdf){#suppfig-scree}
+
+![PCA plot.](figures/screeplot_rlog.pdf){#suppfig-pca}
