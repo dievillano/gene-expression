@@ -121,56 +121,6 @@ counts_mat <- counts |>
   as.matrix()
 ```
 
-----------------------------
-
-```{r}
-library(ComplexHeatmap)
-```
-
-```{r}
-hm_metadata <- samples |> 
-  tibble::column_to_rownames(var = "sample") |> 
-  select(strain, media, temperature)
-```
-
-```{r}
-counts_mat_top50var <- counts_mat[genes_top50var, ]
-```
-
-```{r}
-count_hm_col <- circlize::colorRamp2(
-  pretty(range(counts_mat_top50var/100), n = 3), 
-  c('#ffffb2','#fecc5c','#fd8d3c','#f03b20','#bd0026')
-)
-```
-
-```{r}
-hm_annotation <-  HeatmapAnnotation(
-  df = hm_metadata, simple_anno_size = unit(0.4, "cm"), 
-  show_annotation_name = TRUE, col = conditions_pal,
-  annotation_label = c("Strain", "Media", "Temperature"), 
-  annotation_name_gp = gpar(fontsize = 7)
-)
-```
-
-```{r}
-counts_hm <- Heatmap(
-  counts_mat_top50var/100, cluster_rows = TRUE, cluster_columns = TRUE, top_annotation = hm_annotation,
-  col = count_hm_col, name = "Raw count\n(x100)", row_names_gp = gpar(fontsize = 7), column_names_gp = gpar(fontsize = 7),
-  row_title = "Genes", row_title_gp = gpar(fontsize = 9), column_title = "Samples", column_title_gp = gpar(fontsize = 9)
-)
-
-draw(counts_hm)
-```
-
-```{r}
-pdf(file = "figures/counts_hm.pdf", width = 6.5, height = 4)
-draw(counts_hm)
-dev.off()
-```
-
------------------------
-
 ### Pre-filtering
 
 ```{r}
@@ -493,11 +443,9 @@ pca_rlog_plot <- pca12_rlog_plot + pca13_rlog_plot + pca23_rlog_plot +
 pca_rlog_plot
 ```
 
-
 ```{r}
 ggsave("figures/pca_rlog_plot.pdf", pca_rlog_plot, width = 12, height = 8)
 ```
-
 
 ```{r}
 pca12_rlog_fact_plot <- plot_pca_rotations(
@@ -617,11 +565,759 @@ pca_rlog_full_plot
 ggsave("figures/pca_rlog_full_plot.pdf", pca_rlog_full_plot, width = 12, height = 12)
 ```
 
+```{r}
+plot_top_loadings_barplot <- function(pca_results, n_top = 10, pcs = 1:3) {
+  
+  loadings <- pca_results$loadings |>
+    as.data.frame() |>
+    tibble::rownames_to_column(var = "gene") |>
+    pivot_longer(
+      cols = starts_with("PC"),
+      names_to = "PC",
+      values_to = "loading"
+    ) |>
+    filter(PC %in% paste0("PC", pcs)) |>
+    group_by(PC) |>
+    slice_max(order_by = abs(loading), n = n_top, with_ties = FALSE) |>
+    ungroup() |> 
+    mutate(gene = forcats::fct_reorder(gene, abs(loading)))
+
+  load_range <- range(loadings$loading, na.rm = TRUE)
+  padding <- 0.1 * diff(load_range) 
+  x_limits <- c(load_range[1] - padding, load_range[2] + padding)
+
+  ggplot(loadings, aes(x = gene, y = loading, fill = loading > 0)) +
+    geom_col() +
+    coord_flip() +
+    geom_text(
+      aes(label = gene), hjust = ifelse(loadings$loading > 0, -0.1, 1.1), 
+      size = 2
+    ) +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    facet_wrap(vars(PC), ncol = 1, scales = "free_y") +
+    scale_fill_manual(
+      values = c("TRUE" = "#377eb8", "FALSE" = "#e41a1c"), guide = "none"
+    ) +
+    theme(
+      axis.title.y = element_blank(), axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(), axis.line.y = element_blank()
+    ) +
+    scale_y_continuous(limits = x_limits) +
+    labs(y = "Loading")
+}
+```
+
+```{r}
+pca_rlog_load_plot <- plot_top_loadings_barplot(pca_rlog)
+pca_rlog_load_plot
+```
+
+```{r}
+ggsave("figures/pca_rlog_load_plot.pdf", pca_rlog_load_plot, width = 7, height = 5.5)
+```
+
+```{r}
+scores <- pca_rlog$rotated |>
+  as.data.frame() |>
+  tibble::rownames_to_column("sample") |>
+  left_join(samples, by = "sample")
+```
+
+```{r}
+pc_names <- colnames(pca_rlog$rotated)[1:3]
+```
+
+```{r}
+factors <- c("strain", "media", "temperature")
+```
+
+```{r}
+anova_results <- expand_grid(pc = pc_names, factor = factors) |> 
+  mutate(
+    anova = map2(
+      pc, factor,
+      \(x, y) {
+        model <- lm(as.formula(paste(x, "~", y)), data = scores)
+        broom::tidy(aov(model)) |> filter(term == y) |>
+          mutate(p_value = p.value, .keep = "none")
+      }
+    )
+  ) |> 
+  unnest(anova) |> 
+  mutate(
+    sig = case_when(
+      p_value < 0.001 ~ "< 0.001",
+      p_value < 0.01 ~ "< 0.01",
+      p_value < 0.05 ~ "< 0.05",
+      TRUE ~ "N.S."
+    ),
+    pc = factor(pc, levels = c("PC1", "PC2", "PC3")),
+    factor = factor(
+      factor, levels = c("strain", "media", "temperature"),
+      labels = c("Strain", "Media", "Temperature")
+    )
+  )
+```
+
+```{r}
+anova_plot <- ggplot(anova_results, aes(x = pc, y = factor, fill = sig)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = signif(p_value, 2)), size = 2) +
+  scale_fill_manual(
+    values = c(
+      "< 0.001" = "#b2182b",
+      "< 0.05" = "#ef8a62",
+      "N.S." = "grey90"
+    ),
+    name = "p-value"
+  ) +
+  labs(x = "Principal component", y = "Experimental factor") +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank()
+  )
+
+anova_plot
+```
+
+```{r}
+ggsave("figures/anova_plot.pdf", anova_plot, width = 5, height = 3)
+```
+
+
+
+### Differential expression analysis
+
+```{r}
+de_dfs <- counts_mats_df |> 
+  mutate(
+    de_df = map(
+      mat,
+      \(x) DESeqDataSetFromMatrix(
+        countData = x, colData = samples, 
+        design = ~ strain + media + temperature + strain:media + 
+          strain:temperature
+      )
+    ),
+    de = map(de_df, DESeq)
+  )
+```
+
+Based on https://github.com/thelovelab/DESeq2/blob/devel/R/plots.R
+
+```{r}
+plot_dispersion <- function(object, size = 0.5) {
+  
+  df <- as_tibble(mcols(object)) |>
+    mutate(
+      dispOutlier = ifelse(dispOutlier, "Yes", "No"),
+      finalDisp = as.numeric(dispersions(object))
+    ) |>
+    filter(baseMean > 0)
+
+  ymin <- 10^floor(
+      log10(min(df$dispGeneEst[df$dispGeneEst > 0], na.rm = TRUE)) - 0.1
+    )
+  
+  df <- df |>
+      mutate(geneEstPlot = pmax(dispGeneEst, ymin))
+  
+  ggplot(df, aes(x = baseMean)) +
+    geom_point(aes(y = geneEstPlot, colour = "Gene"), size = size) +
+    geom_point(
+      aes(y = finalDisp, shape = dispOutlier, colour = "Shrinkage"), size = size
+    ) +
+    geom_point(aes(y = dispFit, colour = "Trend"), size = size) +
+    scale_shape_manual(values = c("Yes" = 4, "No" = 19), name = "Outlier") +
+    scale_colour_manual(
+      values = c("Gene" = "gray", "Shrinkage" = "#377eb8", "Trend" = "#e41a1c"),
+      name = "Estimate"
+    ) +
+    scale_x_log10() +
+    scale_y_log10() +
+    labs(x = "Mean of expression level", y = "Dispersion") 
+  
+}
+```
+
+```{r}
+dispersion_full_plot <- plot_dispersion(de_dfs$de[[1]], size = 0.8)
+dispersion_full_plot
+```
+
+```{r}
+dispersion_filter_plot <- plot_dispersion(de_dfs$de[[2]], size = 0.8)
+dispersion_filter_plot
+```
+
+```{r}
+dispersion_plot <- dispersion_full_plot / dispersion_filter_plot + 
+  plot_layout(guides = "collect") +
+  plot_annotation(tag_levels = "A")
+dispersion_plot
+```
+
+
+```{r}
+ggsave("figures/dispersion_plot.pdf", dispersion_plot, width = 8, height = 6)
+```
+
+```{r}
+res_names <- resultsNames(de_dfs$de[[1]])[-1]
+```
+
+```{r}
+de_contrasts <- tibble::tibble(term = res_names) |> 
+  mutate(
+    contrast = purrr::map(
+      term,
+      \(x) c(0, as.numeric(res_names == x))
+    )
+  )
+```
+
+```{r}
+de_results <- tidyr::expand_grid(de_dfs, de_contrasts) |> 
+  select(-c(mat, de_df)) |> 
+  mutate(
+    term_fct = factor(
+      term, levels = res_names,
+      labels = c(
+        "Strain (FL)", "Media (YC)", "Media (YE)", "Media (YCE)", "Temperature (30)",
+        "Strain (FL) + Media (YC)", "Strain (FL) + Media (YE)", 
+        "Strain (FL) + Media (YCE)", 
+        "Strain (FL) + Temperature (30)"
+      )
+    )
+  ) |> 
+  mutate(
+    term_type = case_when(
+      grepl("[+]", term_fct) ~ "interaction",
+      TRUE ~ "main"
+    )
+  )
+```
+
+```{r}
+de_results <- de_results |> 
+  mutate(
+    result = map2(
+      de, term,
+      \(x, y) results(
+        x, name = y, lfcThreshold = 0, alpha = 0.1, 
+        independentFiltering = TRUE
+      )
+    ),
+    result_shrink = pmap(
+      list(a = de, b = result, c = term), 
+      \(a, b, c) lfcShrink(dds = a, coef = c, res = b , type = "apeglm")
+    ), 
+    result_df = map(
+      result_shrink,
+      \(x) as.data.frame(x) |> 
+        tibble::rownames_to_column(var = "gene") |> 
+        relocate(gene, .before = everything()) |> 
+        mutate(
+          detection_call = case_when(
+            padj <= 0.1 ~ 1,
+            padj > 0.1 ~ 0,
+            is.na(padj) ~ NA_integer_
+          ),
+          detection_call_fct = factor(
+            detection_call, levels = c("1", "0"),
+            labels = c("Sig.", "N.S.")
+          )
+        )
+    )
+  )
+```
+
+```{r}
+de_results_df <- de_results |> 
+  select(type, term, term_fct, term_type, result_df) |> 
+  unnest(result_df)
+```
+
+```{r}
+de_results_df_full <- de_results_df |> 
+  filter(type == "full", term_type == "interaction")
+```
+
+```{r}
+de_results_df_full |> 
+  drop_na(pvalue) |> 
+  ggplot(aes(pvalue)) +
+  facet_wrap(vars(term_fct), ncol = 2) +
+  geom_histogram(fill = "gray", colour = "black", breaks = 0:20/20) 
+```
+
+```{r}
+de_results_df_filter <- de_results_df |> 
+  filter(type == "filter", term_type == "interaction")
+```
+
+```{r}
+pvalue_hist <- de_results_df_filter |> 
+  drop_na(pvalue) |> 
+  ggplot(aes(pvalue)) +
+  facet_wrap(vars(term_fct), ncol = 2) +
+  geom_histogram(fill = "gray", colour = "black", breaks = 0:20/20) +
+  labs(x = "p-value", y = "Frequency")
+
+pvalue_hist
+```
+
+```{r}
+ggsave("figures/pvalue_hist.pdf", pvalue_hist, width = 6, height = 5)
+```
+
+```{r}
+results_terms <- de_results_df |> 
+  filter(term_type == "interaction") |> 
+  group_by(type, term, term_fct) |> 
+  summarise(
+    filtered = sum(!is.na(pvalue) & is.na(padj) & baseMean > 0),
+    outilers = sum(is.na(pvalue) & is.na(padj) & baseMean > 0),
+    upregulated = sum(!is.na(padj) & detection_call == 1 & log2FoldChange > 0),
+    downregulated = sum(!is.na(padj) & detection_call == 1 & log2FoldChange <= 0),
+    .groups = "drop"
+  )
+
+results_terms
+```
+
+```{r}
+readr::write_csv(results_terms, "results/results_terms.csv")
+```
+
+```{r}
+ma_plot <- de_results_df_filter |>
+  drop_na(padj) |> 
+  ggplot(aes(x = log2(baseMean), y = log2FoldChange)) +
+  geom_point(aes(color = detection_call_fct), size = 0.5, alpha = 0.8) +
+  scale_color_manual(values = c("Sig." = "firebrick", "N.S." = "grey")) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  facet_wrap(vars(term_fct), ncol = 2) +
+  labs(
+    x = "log2 mean expression level",
+    y = "LFC",
+    color = NULL
+  )
+
+ma_plot
+```
+
+```{r}
+ggsave("figures/ma_plot.pdf", ma_plot, width = 8, height = 5.5)
+```
+
+```{r}
+detected <- de_results |> 
+  mutate(
+    detected = purrr::map(
+      result_df, 
+      \(x) x |> 
+        filter(detection_call == 1) |> 
+        pull(gene)
+    )
+  ) |> 
+  select(type, term, term_fct, term_type, detected) |> 
+  pivot_wider(
+    id_cols = c(term, term_fct, term_type), names_from = type, values_from = detected
+  ) 
+```
+
+```{r}
+library(ComplexHeatmap)
+```
+
+```{r}
+detected <- detected |> 
+  mutate(
+    comb_mat = map2(
+      full, filter, 
+      \(x, y) {
+        l <- list(full = x, filter = y)
+        make_comb_mat(l)
+      }
+    ),
+    upset_plot = map(
+      comb_mat, 
+      \(x) UpSet(
+        x, comb_order = order(comb_size(x), decreasing = TRUE), 
+        top_annotation = upset_top_annotation(x, add_numbers = TRUE),
+        right_annotation = upset_right_annotation(x, add_numbers = TRUE)
+      )
+    )
+  )
+```
+
+```{r}
+detected$upset_plot[[1]]
+```
+
+```{r}
+detected_inter <- detected |> 
+  filter(term_type == "interaction") |> 
+  select(c(term, term_fct, filter))
+
+detected_inter_list <- detected_inter$filter
+names(detected_inter_list) <- detected_inter$term_fct
+```
+
+```{r}
+comb_mat_inter <- make_comb_mat(detected_inter_list)
+```
+
+```{r}
+upset_plot <- UpSet(
+  comb_mat_inter, 
+  comb_order = order(comb_size(comb_mat_inter), decreasing = TRUE), 
+  top_annotation = upset_top_annotation(
+    comb_mat_inter, add_numbers = TRUE, annotation_name_gp = gpar(fontsize = 7)
+  ),
+  right_annotation = upset_right_annotation(
+    comb_mat_inter, add_numbers = TRUE, annotation_name_gp = gpar(fontsize = 7)
+  ),
+  row_names_gp = gpar(fontsize = 9)
+)
+
+upset_plot
+```
+
+```{r}
+pdf(file = "figures/upset_plot.pdf", width = 6.5, height = 3.5)
+draw(upset_plot)
+dev.off()
+```
+
+```{r}
+volcano_data <- de_results_df_filter |>
+  drop_na(padj) |> 
+  group_by(term) |>
+  mutate(
+    rank = rank(padj, ties.method = "first"),
+    min_nonzero_padj = min(padj[padj > 1e-50], na.rm = TRUE),
+    padj = if_else(padj < 1e-30, min_nonzero_padj * 1e-1, padj),
+    neg_log10_padj = -log10(padj)
+  ) |>
+  ungroup()
+```
+
+```{r}
+top_genes_volcano <- volcano_data |>
+  filter(rank <= 10)
+```
+
+```{r}
+volcano_plot <- volcano_data |> 
+  ggplot(
+    aes(x = log2FoldChange, y = neg_log10_padj)
+  ) +
+  geom_point(aes(colour = detection_call_fct), alpha = 0.6, size = 0.8) +
+  geom_text_repel(
+    data = top_genes_volcano,
+    aes(label = gene),
+    size = 3,
+    max.overlaps = Inf,
+    box.padding = 0.3,
+    show.legend = FALSE
+  ) +
+  geom_hline(yintercept = 1, linetype = "dashed", linewidth = 0.1) +
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.1) +
+  facet_wrap(vars(term_fct), scales = "free") +
+  scale_color_manual(
+    values = c("Sig." = "firebrick","N.S." = "gray")
+  ) +
+  labs(
+    x = "LFC",
+    y = "-log10 adj. p-value",
+    color = NULL
+  ) 
+
+volcano_plot
+```
+
+```{r}
+ggsave("figures/volcano_plot.pdf", volcano_plot, height = 8.5, width = 11)
+```
+
+```{r}
+repeated_top_genes <- top_genes_volcano |>
+  dplyr::count(gene, name = "n_contrasts") |>
+  filter(n_contrasts > 1) |>
+  arrange(desc(n_contrasts))
+```
+
+```{r}
+readr::write_csv(repeated_top_genes, "results/repeated_top_genes.csv")
+```
+
+```{r}
+detected_genes <- de_results_df_filter |> 
+  drop_na(padj) |> 
+  filter(detection_call == 1) |> 
+  pull(gene) |> 
+  unique()
+```
+
+```{r}
+clustering <- mats |> 
+  filter(type == "filter", method != "cpm") |> 
+  select(method, mat) |> 
+  mutate(
+    transformed = map2(
+      method, mat, \(x, y) get_transform(y, method = x, blind = FALSE)
+    ),
+    transformed = map(
+      transformed, \(x) x[detected_genes, ]
+    ),
+    genes_var = map(transformed, \(x) rowVars(x)),
+    genes_keep = map(
+      genes_var, \(x) order(x, decreasing = TRUE)[1:500]
+    ),
+    transformed = map2(transformed, genes_keep, \(x, y) x[y, ]),
+    transformed_scaled = map(transformed, \(x) t(scale(t(x))))
+  ) |> 
+  select(-c(mat, genes_var, genes_keep, transformed))
+```
+
+```{r}
+hclust_pearson <- function(x, k) {
+  d <- as.dist(1 - cor(t(x), method = "pearson"))  
+  hc <- hclust(d, method = "ward.D2")
+  cutree(hc, k = k)
+  list(cluster = cutree(hc, k = k))
+}
+```
+
+```{r}
+gap_plots <- clustering |> 
+  mutate(
+    gap_plot = map(
+      transformed_scaled, 
+      \(x) factoextra::fviz_nbclust(
+        x, FUNcluster = hclust_pearson, method = "gap_stat", verbose = FALSE
+      ) +
+        labs(title = NULL, x = "Number of clusters", y = "Gap statistic")
+    )
+  )
+```
+
+```{r}
+walk(gap_plots$gap_plot, print)
+```
+
+```{r}
+ggsave("figures/gap_plot.pdf", gap_plots$gap_plot[[2]], width = 6, height = 4)
+```
+
+```{r}
+samples_heatmap <- samples |> 
+  tibble::column_to_rownames(var = "sample") |> 
+  select(strain, media, temperature)
+```
+
+```{r}
+ha <-  HeatmapAnnotation(
+  df = samples_heatmap[, rev(colnames(samples_heatmap))], 
+  simple_anno_size = unit(0.4, "cm"), show_annotation_name = TRUE, 
+  col = conditions_pal[1:3], 
+  annotation_label = c("Strain", "Media", "Temperature"), 
+  annotation_name_gp = gpar(fontsize = 7)
+)
+```
+
+```{r}
+col_fun <- circlize::colorRamp2(c(-2, 0, 2), c("#2c7bb6", "#ffffbf", "#d7191c"))
+```
+
+```{r}
+heatmaps <- clustering |> 
+  mutate(
+    heatmap = map(
+      transformed_scaled,
+      \(x) {
+        h <- Heatmap(
+          x, name = "z-scores", show_row_names = FALSE, 
+          clustering_method_rows = "ward.D2",
+          clustering_method_columns = "ward.D2", split = 4,
+          clustering_distance_rows = "pearson", top_annotation = ha,
+          col = col_fun, row_names_gp = gpar(fontsize = 7), 
+          column_names_gp = gpar(fontsize = 7),
+          row_title_gp = gpar(fontsize = 9), 
+          column_title = "Samples", column_title_gp = gpar(fontsize = 9)
+        ) 
+        draw(h)
+      }
+    )
+  )
+```
+
+```{r}
+pdf(file = "figures/heatmap_rlog.pdf", width = 6.5, height = 6)
+heatmaps$heatmap[[2]]
+dev.off()
+```
+
+```{r}
+cluster_pal <- c("#d00000", "#ffba08", "#3f88c5", "#032b43")
+names(cluster_pal) <- as.character(1:4)
+```
+
+
+```{r}
+line_plots <- heatmaps |> 
+  mutate(
+    clust_list = map2(
+      transformed_scaled, heatmap, 
+      \(x, y) lapply(row_order(y), \(a) row.names(x)[a])
+    ),
+    clust_df = map(
+      clust_list, 
+      \(x) list_rbind(
+        imap(x, \(y, idy) tibble(gene = y, cluster = idy))
+      )
+    ),
+    gene_clust = map2(
+      transformed_scaled, clust_df,
+      \(x, y) x |> 
+        as.data.frame() |> 
+        tibble::rownames_to_column(var = "gene") |> 
+        pivot_longer(
+          starts_with("S"), names_to = "sample", values_to = "expression"
+        ) |> 
+        inner_join(samples, by = c("sample" = "sample")) |> 
+        inner_join(y, by = "gene") |> 
+        mutate(cluster = factor(cluster, levels = as.character(1:4)))
+    ),
+    lineplot_temperature = map(
+      gene_clust, 
+      \(x) x |> 
+        group_by(cluster, strain, temperature) |> 
+        summarise(mean = mean(expression), sd = sd(expression), .groups = "drop") |> 
+        ggplot(aes(forcats::fct_rev(temperature), mean, colour = cluster, group = cluster)) +
+        geom_point() +
+        geom_line() +
+        geom_hline(yintercept = 0, linetype = "dashed") +
+        labs(x = "Temperature", y = "Average z-score") +
+        facet_wrap(vars(strain)) +
+        scale_colour_manual(name = "Cluster", values = cluster_pal) 
+    ),
+    lineplot_media = map(
+      gene_clust, 
+      \(x) x |> 
+        group_by(cluster, strain, media) |> 
+        summarise(mean = mean(expression), sd = sd(expression), .groups = "drop") |> 
+        ggplot(aes(media, mean, colour = cluster, group = cluster)) +
+        geom_point() +
+        geom_line() +
+        geom_hline(yintercept = 0, linetype = "dashed") +
+        labs(x = "Media", y = "Average z-score") +
+        facet_wrap(vars(strain)) +
+        scale_colour_manual(name = "Cluster", values = cluster_pal) 
+    )
+  )
+```
+
+```{r}
+walk(line_plots$lineplot_temperature, print)
+```
+
+```{r}
+walk(line_plots$lineplot_media, print)
+```
+
+```{r}
+cluter_profile_plot <- line_plots$lineplot_media[[2]] / 
+  line_plots$lineplot_temperature[[2]] +
+  plot_layout(guides = "collect", axes = "collect_y")
+
+cluter_profile_plot
+```
+
+```{r}
+ggsave("figures/cluster_profile_plot.pdf", cluter_profile_plot, width = 8, height = 6)
+```
+
+```{r}
+de_cluster <- line_plots$clust_df[[2]] |> 
+  left_join(de_results_df_filter, by = "gene")
+
+de_cluster
+```
+
+```{r}
+top_genes <- de_cluster |> 
+  group_by(gene) |> 
+  summarise(
+    max_abs_lfc = max(abs(log2FoldChange), na.rm = TRUE),
+    min_padj = min(padj, na.rm = TRUE),
+    .groups = "drop"
+  ) |> 
+  mutate(
+    rank_lfc = rank(-max_abs_lfc, ties.method = "min"),
+    rank_padj = rank(min_padj, ties.method = "min"),
+    avg_rank = (rank_lfc + rank_padj) / 2
+  ) |> 
+  # arrange(avg_rank) |> 
+  arrange(min_padj) |> 
+  slice_head(n = 100)
+```
+
+```{r}
+heatmap_matrix <- de_cluster |> 
+  filter(gene %in% top_genes$gene) |> 
+  mutate(lfc_masked = ifelse(padj < 0.1, log2FoldChange, NA)) |> 
+  select(gene, term, lfc_masked) |> 
+  pivot_wider(names_from = term, values_from = lfc_masked) |> 
+  tibble::column_to_rownames("gene") |> 
+  as.matrix()
+```
+
+```{r}
+annotation_df <- line_plots$clust_df[[2]] |> 
+  filter(gene %in% top_genes$gene) |> 
+  mutate(Cluster = factor(cluster), .keep = "unused") |> 
+  tibble::column_to_rownames(var = "gene")
+```
+
+```{r}
+heatmap_lfc <- pheatmap(
+  heatmap_matrix,
+  name = "LFC",
+  cluster_rows = FALSE,
+  cluster_cols = FALSE,
+  legend_breaks = seq(-6, 6, by = 2),
+  annotation_row = annotation_df,
+  labels_col = c(
+    "FL + YC", "FL + YE", "FL + YCE", "FL + 30"
+  ),
+  annotation_names_row = FALSE,
+  angle_col = "0",
+  annotation_colors = list(Cluster = cluster_pal),
+  column_names_side = "top",
+  fontsize = 7,
+  fontsize_row = 6,
+  fontsize_col = 7
+  # color = colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(100),
+  # breaks = seq(-3, 3, length.out = 101),
+  # fontsize_row = 6
+)
+
+draw(heatmap_lfc)
+```
+
+```{r}
+pdf(file = "figures/heatmap_lfc.pdf", width = 5, height = 9.5)
+draw(heatmap_lfc)
+dev.off()
+```
 
 
 
 
-
+----------------------------
 
 ```{r}
 pca_plots <- pca_results |> 
@@ -711,7 +1407,6 @@ pca_boxplot <- function(pca, cond, type, method) {
 }
 ```
 
-
 ```{r}
 pca_results <- pca_results |> 
   mutate(
@@ -742,73 +1437,6 @@ for (plt in pca_results$boxplot_media) print(plt)
 for (plt in pca_results$boxplot_temperature) print(plt)
 ```
 
-### Differential expression analysis
-
-```{r}
-de_dfs <- counts_mats_df |> 
-  mutate(
-    de_df = map(
-      mat,
-      \(x) DESeqDataSetFromMatrix(
-        countData = x, colData = samples, 
-        design = ~ strain + media + temperature + strain:media + 
-          strain:temperature
-      )
-    ),
-    de = map(de_df, DESeq)
-  )
-```
-
-```{r}
-plotDispEsts(de_dfs$de[[1]])
-plotDispEsts(de_dfs$de[[2]])
-```
-
-```{r}
-res_names <- resultsNames(de_dfs$de[[1]])[-1]
-```
-
-```{r}
-de_contrasts <- tibble::tibble(term = res_names) |> 
-  mutate(
-    contrast = purrr::map(
-      term,
-      \(x) c(0, as.numeric(res_names == x))
-    )
-  )
-```
-
-```{r}
-de <- tidyr::expand_grid(de_dfs, de_contrasts) |> 
-  relocate(term, .before = mat)
-```
-
-```{r}
-de_results <- de |> 
-  mutate(
-    result = map2(
-      de, term,
-      \(x, y) results(
-        x, name = y, lfcThreshold = 0, alpha = 0.1, 
-        independentFiltering = TRUE
-      )
-    ),
-    result_df = purrr::map(
-      result,
-      \(x) as.data.frame(x) |> 
-        tibble::rownames_to_column(var = "gene") |> 
-        relocate(gene, .before = everything()) |> 
-        mutate(
-          detection_call = case_when(
-            padj < 0.1 ~ 1,
-            padj >= 0.1 ~ 0,
-            is.na(padj) ~ NA_integer_
-          )
-        )
-    )
-  )
-```
-
 ```{r}
 removed_by_filter <- de_results |> 
   mutate(
@@ -824,7 +1452,6 @@ removed_by_filter <- de_results |>
 
 removed_by_filter
 ```
-
 
 ```{r}
 de_results <- de_results |> 
@@ -892,44 +1519,7 @@ for (plt in de_results_inter$volcano_plot) print(plt)
 for (plt in de_results_inter$pvalue_plot) print(plt)
 ```
 
-```{r}
-detected <- de_results |> 
-  mutate(
-    detected_genes = purrr::map(
-      result_df, 
-      \(x) x |> 
-        filter(detection_call == 1) |> 
-        pull(gene)
-    )
-  ) |> 
-  select(type, term, detected_genes) |> 
-  pivot_wider(
-    id_cols = term, names_from = type, values_from = detected_genes
-  ) 
-```
 
-
-
-```{r}
-detected <- detected |> 
-  mutate(
-    comb_mat = map2(
-      full, filter, 
-      \(x, y) {
-        l <- list(full = x, filter = y)
-        make_comb_mat(l)
-      }
-    ),
-    upset_plot = map(
-      comb_mat, 
-      \(x) UpSet(
-        x, comb_order = order(comb_size(x), decreasing = TRUE), 
-        top_annotation = upset_top_annotation(x, add_numbers = TRUE),
-        right_annotation = upset_right_annotation(x, add_numbers = TRUE)
-      )
-    )
-  )
-```
 
 ```{r}
 for (plt in detected$upset_plot[4:6]) print(plt)
@@ -957,144 +1547,47 @@ UpSet(
 )
 ```
 
-Explore genes not found by filtering.
-
 ```{r}
-detected_genes <- de_results_inter |> 
-  select(result_df) |> 
-  unnest(result_df) |> 
-  filter(detection_call == 1) |> 
-  pull(gene) |> 
-  unique()
-
-length(detected_genes)
-```
-
-```{r}
-clustering <- transformed |> 
-  filter(type == "filter") |> 
-  select(method, mat) |> 
-  mutate(
-    transformed = map2(
-      method, mat, \(x, y) get_transform(y, method = x, blind = FALSE)
-    )
-  )
-```
-
-```{r}
-samples_heatmap <- samples |> 
+hm_metadata <- samples |> 
   tibble::column_to_rownames(var = "sample") |> 
   select(strain, media, temperature)
 ```
 
-
+```{r}
+counts_mat_top50var <- counts_mat[genes_top50var, ]
+```
 
 ```{r}
-ha <-  HeatmapAnnotation(
-  df = samples_heatmap[, rev(colnames(samples_heatmap))], 
-  simple_anno_size = unit(0.4, "cm"), show_annotation_name = TRUE, 
-  col = conditions_pal
+count_hm_col <- circlize::colorRamp2(
+  pretty(range(counts_mat_top50var/100), n = 3), 
+  c('#ffffb2','#fecc5c','#fd8d3c','#f03b20','#bd0026')
 )
 ```
 
 ```{r}
-clustering <- clustering |> 
-  mutate(
-    transformed = map(transformed, \(x) x[detected_genes,]),
-    genes_vars = map(transformed, \(x) rowVars(x)),
-    genes_keep = map(
-      genes_vars, \(x) order(x, decreasing = TRUE)[1:300]
-    ),
-    transformed_keep = map2(transformed, genes_keep, \(x, y) x[y, ]),
-    transformed_keep_scale = map(transformed_keep, \(x) t(scale(t(x)))),
-    heatmap = map2(
-      method, transformed_keep_scale,
-      \(x, y) {
-        set.seed(123)
-        h <- Heatmap(
-          y, show_row_names = FALSE, clustering_method_rows = "ward.D2",
-          clustering_method_columns = "ward.D2", km = 4, row_km_repeats = 5,
-          clustering_distance_rows = "pearson", top_annotation = ha,
-          col = col_fun
-        ) 
-        draw(h)
-      }
-    )
-  )
+hm_annotation <-  HeatmapAnnotation(
+  df = hm_metadata, simple_anno_size = unit(0.4, "cm"), 
+  show_annotation_name = TRUE, col = conditions_pal,
+  annotation_label = c("Strain", "Media", "Temperature"), 
+  annotation_name_gp = gpar(fontsize = 7)
+)
 ```
 
 ```{r}
-for (plt in clustering$heatmap) print(plt)
+counts_hm <- Heatmap(
+  counts_mat_top50var/100, cluster_rows = TRUE, cluster_columns = TRUE, top_annotation = hm_annotation,
+  col = count_hm_col, name = "Raw count\n(x100)", row_names_gp = gpar(fontsize = 7), column_names_gp = gpar(fontsize = 7),
+  row_title = "Genes", row_title_gp = gpar(fontsize = 9), column_title = "Samples", column_title_gp = gpar(fontsize = 9)
+)
+
+draw(counts_hm)
 ```
 
 ```{r}
-clustering <- clustering |> 
-  mutate(
-    clust_list = map2(
-      transformed_keep_scale, heatmap, 
-      \(x, y) lapply(row_order(y), \(a) row.names(x)[a])
-    ),
-    clust_df = map(
-      clust_list, 
-      \(x) list_rbind(
-        imap(x, \(y, idy) tibble(gene = y, cluster = idy))
-      )
-    ),
-    gene_clust = map2(
-      transformed_keep_scale, clust_df,
-      \(x, y) x |> 
-        as.data.frame() |> 
-        tibble::rownames_to_column(var = "gene") |> 
-        pivot_longer(
-          starts_with("S"), names_to = "sample", values_to = "expression"
-        ) |> 
-        inner_join(samples, by = c("sample" = "sample")) |> 
-        inner_join(y, by = "gene")
-    ),
-    lineplot_temperature = map2(
-      method, gene_clust, 
-      \(x, y) y |> 
-        group_by(cluster, strain, temperature) |> 
-        summarise(mean = mean(expression), sd = sd(expression), .groups = "drop") |> 
-        ggplot(aes(forcats::fct_rev(temperature), mean, colour = cluster, group = cluster)) +
-        geom_point() +
-        geom_line() +
-        facet_wrap(vars(strain)) +
-        ggtitle(x)
-    ),
-    lineplot_media = map2(
-      method, gene_clust, 
-      \(x, y) y |> 
-        group_by(cluster, strain, media) |> 
-        summarise(mean = mean(expression), sd = sd(expression), .groups = "drop") |> 
-        ggplot(aes(media, mean, colour = cluster, group = cluster)) +
-        geom_point() +
-        geom_line() +
-        facet_wrap(vars(strain)) +
-        ggtitle(x)
-    )
-  )
+pdf(file = "figures/counts_hm.pdf", width = 6.5, height = 4)
+draw(counts_hm)
+dev.off()
 ```
 
-```{r}
-for (plt in clustering$lineplot_temperature) print(plt)
-```
-
-```{r}
-for (plt in clustering$lineplot_media) print(plt)
-```
-
-```{r}
-de_results_inter_df <- de_results_inter |> 
-  select(term, result_df) |> 
-  unnest(result_df)
-```
-
-```{r}
-readr::write_csv(de_results_inter_df, "de_results_inter.csv", na = "")
-```
-
-
-
-
+-----------------------
 

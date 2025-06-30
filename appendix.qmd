@@ -9,3 +9,13 @@
 ![Scree plot.](figures/screeplot_rlog.pdf){#suppfig-scree}
 
 ![PCA plot.](figures/screeplot_rlog.pdf){#suppfig-pca}
+
+![PCA plot. displays the samples projected onto principal component axes 1 vs 2 and 2 vs 3, coloured by experimental condition, using the rlog-transformed data](figures/pca_rlog_plot.pdf){#suppfig-pca-rlog}
+
+![Dispersion plot.](figures/dispersion_plot.pdf){#suppfig-dispersion}
+
+![p-value histograms.](figures/pvalue_hist.pdf){#suppfig-pvalue}
+
+![MA plot.](figures/ma_plot.pdf){#suppfig-ma}
+
+![Gap plot.](figures/gap_plot.pdf){#suppfig-gap}

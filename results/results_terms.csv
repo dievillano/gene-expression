@@ -1,0 +1,9 @@
+type,term,term_fct,filtered,outilers,upregulated,downregulated
+filter,strainFL.mediaYC,Strain (FL) + Media (YC),129,0,476,778
+filter,strainFL.mediaYCE,Strain (FL) + Media (YCE),0,0,955,1268
+filter,strainFL.mediaYE,Strain (FL) + Media (YE),0,0,848,918
+filter,strainFL.temperature30,Strain (FL) + Temperature (30),0,0,421,736
+full,strainFL.mediaYC,Strain (FL) + Media (YC),263,0,469,779
+full,strainFL.mediaYCE,Strain (FL) + Media (YCE),0,0,936,1253
+full,strainFL.mediaYE,Strain (FL) + Media (YE),0,0,836,905
+full,strainFL.temperature30,Strain (FL) + Temperature (30),132,0,419,734

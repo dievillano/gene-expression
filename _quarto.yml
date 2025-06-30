@@ -10,6 +10,7 @@ book:
     - intro.qmd
     - methods.qmd
     - results.qmd
+    - conclusions.qmd
     - references.qmd
     - appendix.qmd
 

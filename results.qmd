@@ -3,7 +3,7 @@ execute:
   include: false
 ---
 
-# Results
+# Results {#sec-results}
 
 ```{r}
 library(dplyr)
@@ -95,12 +95,109 @@ pca_results_comp_filter_var <- format(
 )
 ```
 
-PCA was performed on the transformed data, yielding an optimal number of three components for all methods except CPM, which retained only one. These components explained `r pca_results_comp_filter_var[2]`%, `r pca_results_comp_filter_var[3]`%, and `r pca_results_comp_filter_var[4]`% of the total variance for $\log_2$-CPM, rlog, and VST, respectively, while CPM explained only `r pca_results_comp_filter_var[1]`%. The scree plot for the rlog-transformed data, shown in @suppfig-scree, illustrates the retained components and their associated variance. @suppfig-pca displays the samples projected onto principal component axes 1 vs 2 and 2 vs 3, coloured by experimental condition, using the rlog-transformed data. Replicates of the same condition cluster closely, indicating good consistency and quality across replicates.
+PCA was performed on the transformed data of the genes at the 10% of highest variance, yielding an optimal number of three components for all methods except CPM, which retained only one. These components explained `r pca_results_comp_filter_var[2]`%, `r pca_results_comp_filter_var[3]`%, and `r pca_results_comp_filter_var[4]`% of the total variance for $\log_2$-CPM, rlog, and VST, respectively, while CPM explained only `r pca_results_comp_filter_var[1]`%. The scree plot for the rlog-transformed data, shown in @suppfig-scree, illustrates the retained components and their associated variance. The score plots for all retained component pairs in @suppfig-pca-rlog show that replicates from the same condition cluster tightly, indicating high consistency and replicate quality. Since the rlog and VST transformations yield similar explained variance (slightly higher for rlog) we will present results based on the rlog-transformed data from this point forward.
 
-@suppfig-pca-media shows the same plot but the samples coloured by the media condition, and we can observe, mostly in plot A, that samples with media Y and YC for different combinations of strain and temperature levels cluster together, and the same for samples with media YE and YCE. This indicates that the addition of CFW to the media have similar expression levels compared to without CFW for certain strain and temperature. 
+![PCA plot.](figures/pca_rlog_full_plot.pdf){#fig-pca-rlog-full}
 
+In @fig-pca-rlog-full, subplot A1, samples separate clearly by strain along PC1 and by media condition along PC2. Notably, samples from conditions Y and YC, as well as YE and YCE, cluster closely together, suggesting that EGTA drives most of the observed separation rather than CFW. Interestingly, the distinction between samples with and without EGTA is more pronounced in the FLC1Δ strain than in the WT strain. A clear separation is also evident between samples grown at the Y and YC media conditions just for the the FLC1Δ strain and not in the other conditions. These patterns suggest a potential interaction between strain and the media at which samples were grown. @fig-pca-rlog-full, subplot A2, shows that CNAG_04283 and CNAG_05602 primarily drive the separation toward the WT strain, with the other genes contributing to the separation toward the FLC1Δ strain. However, the effect of CNAG_04283 is substantially stronger, which is expected since it corresponds to the FLC1 gene itself. Genes CNAG_05662 and CNAG_00588 align closely with the FLC1Δ strain samples, while CNAG_00269, CNAG_01272, and CNAG_04891 appear to contribute to the separation of FLC1Δ samples grown at the Y and YC media conditions. Finally, CNAG_01653 is strongly associated with FLC1Δ strain samples grown with EGTA, suggesting a potential gene-specific response to this experimental condition.
 
+Moving to @fig-pca-rlog-full, subplot B1, samples separate by temperature along PC3, with further separation by strain within each temperature group, suggesting a potential interaction between these factors. In @fig-pca-rlog-full, subplot B2, gene CNAG_04217 appears to drive the separation of FLC1Δ samples at 30°C, while CNAG_02526, CNAG_05662, CNAG_01653, CNAG_00588, and CNAG_04891 contribute to the separation of FLC1Δ samples at 37°C. Conversely, CNAG_03454 and CNAG_05602 drive separation toward WT samples at 30°C, and CNAG_04283 (FLC1 gene) drives separation toward WT samples at 37°C. Finally, in @fig-pca-rlog-full, subplot C1, we again observe temperature-driven separation along PC3 and media-driven separation along PC2. In @fig-pca-rlog-full, subplot C2, Most genes with strong loadings on these components are associated with samples grown at 30°C in YPD. Notably, CNAG_01653 makes a major contribution to the separation of samples grown at 37°C in the YE and YCE media conditions.
 
+![ANOVA plot.](figures/anova_plot.pdf){#fig-anova}
+
+![Loadings plot.](figures/pca_rlog_load_plot.pdf){#fig-pca-rlog-load}
+
+The results of the pairwise ANOVA tests between the retained principal components and experimental factors (@fig-anova) show that PC1 primarily captures variation associated with the strain condition. PC2 is influenced by all three experimental factors, with the strongest association observed for the media condition. PC3 reflects separation driven by both media and temperature, with the most significant effect corresponding to temperature. The top 10 genes contributing most strongly to each principal component are shown in @fig-pca-rlog-load. Notably, CNAG_01653 exhibits the largest loading magnitude overall, particularly in PC2, and also shows substantial contributions to PC1 and PC3. CNAG_04283, which encodes the FLC1 gene, contributes strongly to both PC1 and PC2. Another prominent gene, CNAG_04891, is among the top contributors to both PC1 and PC2 as well. For PC3, CNAG_03454 shows the highest association, followed by CNAG_04217 and CNAG_00588, the latter also contributing notably to PC1.
+
+```{r}
+results_terms <- readr::read_csv("results/results_terms.csv")
+```
+
+```{r}
+filtered <- results_terms |> 
+  filter(type == "filter") |> 
+  pull(filtered) |> 
+  magrittr::extract(1)
+```
+
+```{r}
+pct_filtered <- format(100*filtered/sum(genes_keep), digits = 2, nsmall = 2)
+```
+
+```{r}
+term_filtered <- results_terms$term_fct[results_terms$filtered == filtered]
+```
+
+Moving on to model fitting for differential expression analysis, we observed that the shrunk dispersion estimates aligned well with the mean-dependent trend, indicating a good overall fit (@suppfig-dispersion). This pattern was more consistent in the filtered dataset, whereas in the unfiltered dataset, the trend appeared to be overly influenced by genes with low mean expression levels. 
+
+The contrasts used to test the significance of the model coefficients (excluding the intercept), which correspond to the log-fold changes (LFCs), were labelled to reflect both the main effects and interaction terms included in the DE analysis. Main effects included "Strain (FL)" for the FLC1Δ strain versus WT, "Media (YC)", "Media (YE)", and "Media (YCE)" for the addition of CFW, EGTA, and both to YPD, respectively, and "Temperature (30)" for growth at 30°C versus 37°C. Interaction terms were labelled as "Strain (FL) + Media (YC)", "Strain (FL) + Media (YE)", and "Strain (FL) + Media (YCE)" to capture the combined effect of strain and media condition, and "Strain (FL) + Temperature (30)" for the interaction between strain and temperature. As previously mentioned, our analysis focused on the interaction terms. Unless otherwise noted, results are based on the filtered dataset. 
+
+The (unadjusted) p-value histograms for each contrast display the expected uniform distribution under the null hypothesis, indicating a well-calibrated multiple testing procedure (@suppfig-pvalue). Similar results were observed for the unfiltered dataset (not shown). No outliers were detected in any contrast. However, `r filtered` genes (`r pct_filtered`%) were automatically removed due to low mean normalized counts during the testing of the `r term_filtered` term, as part of `DESeq2`’s independent filtering procedure. MA plots for all contrasts showed a uniform distribution of significantly upregulated and downregulated genes across the range of mean expression levels, suggesting that the procedure is not biased towards highly expressed genes (@suppfig-ma).
+
+```{r}
+library(gt)
+```
+
+```{r}
+#| include: true
+#| echo: false
+#| label: tbl-02
+#| tbl-cap: "Number and percentage of upregulated and downregulated genes identified at an FDR threshold of 0.1 for each contrast tested, along with the total number of DE genes."
+results_terms |> 
+  filter(type == "filter") |> 
+  mutate(
+    total = upregulated + downregulated,
+    up_pct = format(100 * upregulated / total, digits = 2, nsmall = 2),
+    down_pct = format(100 * downregulated / total, digits = 2, nsmall = 2),
+    up = paste0(upregulated, " (", up_pct, "%)"),
+    down = paste0(downregulated, " (", down_pct, "%)"),
+    tot = paste0(total, " (100%)")
+  ) |> 
+  select(term_fct, up, down, tot) |> 
+  gt(rowname_col = "contrast") |> 
+  cols_label(
+    term_fct = md("**Contrast**"),
+    up = md("**Upregulated**"),
+    down = md("**Downregulated**"),
+    tot = md("**Total**")
+  ) |> 
+  cols_align(columns = -term_fct, align = "center") |> 
+  tab_options(
+    table.font.size = 10, table.width = "70%", table.align = "center"
+  )
+```
+
+![UpSet plot.](figures/upset_plot.pdf){#fig-upset}
+
+The Strain (FL) + Media (YCE) contrast yielded the highest number of differentially expressed (DE) genes (2223), while Strain (FL) + Temperature (30) had the fewest (767) (@tbl-02). All contrasts showed more downregulated than upregulated genes. The highest percentage of downregulated genes was observed in Strain (FL) + Temperature (30) (63.61%), although the contrast with the greatest absolute number of downregulated genes was Strain (FL) + Media (YCE) (1268). The highest proportion of upregulated genes was found in Strain (FL) + Media (YE) (48.02%), while the highest count of upregulated genes overall was again seen in Strain (FL) + Media (YCE) (955) (@tbl-02). The Strain (FL) + Media (YCE) and Strain (FL) + Media (YE) contrasts shared the highest number of differentially expressed (DE) genes in common (712). Strain (FL) + Media (YCE) also had the greatest number of uniquely identified DE genes (473), i.e. those not shared with any other contrast. This was followed by Strain (FL) + Temperature (30) (401), Strain (FL) + Media (YC) (363), and Strain (FL) + Media (YE) (254) (@fig-upset). Additionally, 180 DE genes were found to be shared across all contrasts (@fig-upset).
+
+![Volcano plot.](figures/volcano_plot.pdf){#fig-volcano}
+
+```{r}
+repeated_top_genes <- readr::read_csv("results/repeated_top_genes.csv")
+```
+
+@fig-volcano highlights the top 10 most significant genes for each contrast. Notably, all of the top genes for the Strain (FL) + Media (YC) interaction were downregulated, while all but one of the top genes for the Strain (FL) + Temperature (30) interaction were upregulated. Gene `r repeated_top_genes$gene[1]` appeared most frequently among the top genes, being significantly differentially expressed in all contrasts except Strain (FL) + Media (YC). In addition, genes `r repeated_top_genes$gene[2]`, `r repeated_top_genes$gene[3]`, `r repeated_top_genes$gene[4]`, `r repeated_top_genes$gene[5]`, and `r repeated_top_genes$gene[6]` were consistently ranked among the top genes in both the Strain (FL) + Media (YE) and Strain (FL) + Media (YCE) contrasts.
+
+INTERACTION PLOTS
+
+![Heatmap.](figures/heatmap_rlog.pdf){#fig-heatmap}
+
+The optimal number of clusters for the top 500 differentially expressed (DE) genes with the highest variance, based on the Gap statistic, was four when using z-scores of the rlog-transformed data (@suppfig-gap). The same number of clusters was obtained using VST-transformed data. In contrast, the $\text{log}_2$-CPM transformation produced an optimal number of one, which is uninformative and suggests that $\text{log}_2$-CPM may be less suitable for capturing meaningful expression patterns in this context. A heatmap of the z-scored expression values across the four clusters (labelled 1–4) is shown in @fig-heatmap. Since the heatmap is based on z-scores, positive values indicate expression levels above the gene’s mean across all conditions, while negative values indicate below-average expression. Cluster 1 stands out from the others, with genes showing above-average expression in the WT strain and below-average expression in the FL strain, especially under the WT-Y-30 condition, which is the basal condition. In contrast, clusters 2–4 contain genes with the opposite pattern (lower z-scores in WT and higher in FL) suggesting a strain-specific shift in relative expression. Within these, genes in cluster 2 tend to show above-average expression in the FL-YE-37 and FL-YCE-37 conditions and near or below-average expression in other FL combinations. Cluster 3 follows a similar pattern but with higher relative expression across more FL conditions than cluster 2. Cluster 4 displays an inverse trend to cluster 2, with higher average expression levels at the FL-Y-30, FL-Y-37, and FL-YC-37 conditions.
+
+![Cluster profile plot.](figures/cluster_profile_plot.pdf){#fig-profile}
+
+In @fig-profile we can observe the different average expression patterns across the levels of media and temperature by the WT and FL strain conditions. Cluster 1 have above-average expression levels across all the levels of media, while the other clusters have below-average expression levels. Cluster 1 show lower expression levels at the media conditions with EGTA than in the media condition without EGTA. Also the it is less expressed in YC than in Y, and have similar average expression at the YE and YCE conditions where the expression level is close to average. The other clusters show an opposite pattern, with higher expression levels at the conditions with EGTA. For the FLC1Δ strain condition (FL), the patterns of the clusters across the media conditions change drastically. At the FL condition, now cluster 1 have less than average expression levels and the other higher than average. The average expression levels in cluster 1 reduce when adding CFW to the media conditions (from Y to YC, and from YE to YCE), while the expression levels are similar for the YC and YE conditions. Genes at cluster 2 increase their expression level when adding CFW to the media condition (from Y to YC, and YE to YCE), and have higher expression levels when EGTA is added (YE and YCE relative to Y and YC). Cluster 3 shows an increase when CFW is added (from Y to YC, and YE from YCE), whith highest expression levels where EGTA is added. Cluster 4 shows an increase when CFW is add (from Y to YC, and YE from YCE), although the increase is superior when adding CFW to the Y media condition, and have lowest expression levels when EGTA is present. Moving on to temperature, at WT, cluster 1 has above-average expression levels, while the other clusters have below-average expression levels. Cluster 1 has lower expression levels on average at 37°C than in 30°C, while the opposite pattern is shown at the other clusters. At the FL condition, the overall expression pattern switch, with cluster 1 having less expressed genes than the other clusters. Cluster 1 reduce its average expression level when passing from 30°C to 37°C, while the other clusters have the opposite pattern. Notably, genes at cluster 4 have similar expression level at 30°C and 37°C.
+
+@fig-profile illustrates the average z-scored expression patterns of the four gene clusters across media and temperature conditions, separately for the WT and FL (FLC1Δ) strains. In the WT strain (top-left panel), cluster 1 genes show consistently above-average expression across all media types, with highest values at the Y media condition and a gradual decrease through YC and YE to YCE, although the difference is greater from Y to YC than froM YE to YCE. In contrast, Clusters 2, 3, and 4 show consistently below-average expression in WT, with expression increasing slightly with the addition of CFW and EGTA. Under the FL strain (top-right panel), the expression patterns invert: cluster 1 now shows below-average expression in all media, with a marked decrease when CFW and EGTA are present (from Y to YC, and from YE to YCE). Meanwhile, clusters 2 and 3 show progressively increasing expression across media, particularly in YE and YCE. Cluster 2 shows a marked increase when EGTA is added, while cluster 3 has a similar trend but with a less dramatic increase when EGTA is added. Cluster 4 shows increased expression when CFW is added (from Y to YC and from YE to YCE), with a stronger effect observed in the Y medium. However, its expression is lowest in conditions where EGTA is present.
+
+Now, we move on to temperature. In the WT strain (bottom-left panel), Cluster 1 genes are expressed above average at both temperatures but show reduced expression at 37°C. Clusters 2–4 remain below average, though expression increases with temperature. In the FL strain (bottom-right panel), expression patterns again invert. Cluster 1 genes show near or below-average expression, decreasing further at 37°C. Meanwhile, clusters 2 and 3 show near or above-average expression, with expression increasing with temperature. Cluster 4 shows above-average expression, however, it maintains nearly constant expression across temperatures.
+
+![Heatmap LFC.](figures/heatmap_lfc.pdf){#fig-heatmap-lfc}
+
+Finally, we ranked the genes we used for clustering according to their p-values (lowest first) and LFC magnitude (highest first), and computed an average ranking to select the top 100 genes. These genes are shown in @fig-heatmap-lfc, which is a heatmap of the LFC across the contrasts for all the genes, alongside with the cluster they belong to. This plot was intented as a tool to select potentially important genes using most of the results presented so far. For example, we can observe that gene CNAG_04469 at the top is significant for both the interaction of strain and media at YE and YCE levels (and no significant for the other interactions), and it is upregulated for both interactions, so this gene gets upregulated at the FL strain condition and YE and YCE conditions relative to the WT-Y-37 condition. We can also see that this gene belongs to cluster 2, and we can expect to have an expression pattern similar to the described using @fig-profile for that cluster. In addition, we see that most of these genes have significant LFCs for the YE and YCE levels, and that genes that significant to YE are in most cases also significant to YCE.
+
+To prioritise the most informative genes, we ranked the 500 genes used for clustering by two criteria: smallest adjusted p-value and largest absolute log2 fold change (LFC), and then computed an average rank across both metrics. The top 100 genes according to this combined ranking are displayed in @fig-heatmap-lfc, which presents a heatmap of their LFCs across all contrasts, along with their corresponding cluster membership. This plot serves as a comprehensive summary tool, allowing us to identify candidate genes of interest by integrating statistical significance, expression changes, and clustering results. For instance, gene CNAG_04469, which appears at the top of the heatmap, is significantly differentially expressed in the interaction between strain and media at the YE and YCE levels, but not at other levels. In both contrasts, the gene is upregulated in the FL strain at the YE and YCE levels relative to the WT-Y-37 reference. This gene is a member of cluster 2, so we can expect an expression profile similar to the described for the genes in cluster 2 in @fig-profile. Moreover, we observe that many of the top-ranked genes show significant LFCs for the YE and YCE conditions, and that significance in one is often accompanied by significance in the other. 
 
 
 

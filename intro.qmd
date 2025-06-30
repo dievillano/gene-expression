@@ -1,9 +1,20 @@
 # Introduction
 
-This is a book created from markdown and executable code.
+*Cryptococcus neoformans* is a globally distributed opportunistic fungal pathogen responsible for hundreds of thousands of deaths annually, primarily affecting individuals with compromised immune systems [@may2016cryptococcus]. Treatment remains a significant challenge due to the limited availability of effective antifungal drugs, which are decades old and increasingly compromised by resistance. All three major classes of antifungal agents (polyenes, azoles, and pyrimidine analogues) face issues related to toxicity and reduced efficacy. The combination of high global disease burden, limited treatment options, and rising drug resistance underscores the urgent need for new therapeutic strategies [@may2016cryptococcus].
 
-See @knuth84 for additional discussion of literate programming.
+Recent research has identified the FLC1 protein as a key factor in *C. neoformans* stress responses and virulence [@stempinski2022cryptococcus]. Notably, FLC1 has homologues in other fungal pathogens but is poorly conserved in humans, making it a promising antifungal drug target. Targeting FLC1 could lead to broad-spectrum antifungal treatments with reduced risk of toxicity to human hosts—potentially representing a therapeutic "Achilles' heel" for *C. neoformans* and related pathogens [@stempinski2022cryptococcus].
 
-```{r}
-1 + 1
-```
+Given the clinical importance of *C. neoformans* and the potential of FLC1 as a drug target, this report presents a statistical analysis of transcriptomic data from an experiment conducted by Rachel Murray at the Wallace Lab, School of Biological Sciences, University of Edinburgh. The experiment aimed to investigate the fungal response to cell wall stress and modulators thereof, including calcofluor white (CFW), a chemical that binds to fungal cell walls; EGTA, a calcium chelator; and deletion of the FLC1 gene, which is believed to be involved in calcium import. Preliminary biological observations indicated that cells lacking FLC1 exhibit abnormal cell wall morphology and experience lethality at 37°C, a phenotype that can be suppressed by the addition of EGTA. The analyses reported here aim to characterise the gene expression patterns underlying these effects, providing statistical insights for further biological interpretation.
+
+RNA sequencing (RNA-seq) is a high-throughput technology that enables comprehensive transcriptome profiling using deep-sequencing methods [@wang2009rna]. Compared to earlier approaches, RNA-Seq provides more accurate and quantitative measurements of gene expression levels and transcript isoforms, allowing for genome-wide analysis at single-base resolution [@wang2009rna]. In the experiment described above, RNA-Seq was employed to measure the abundance of RNA transcripts (expression level) across thousands of genes following a 3-hour incubation under various combinations of environmental conditions (growth media and temperature) and genetic background (presence or deletion of the FLC1 gene). 
+
+Our analysis focused on the RNA-Seq data with three primary objectives: (i) to assess the quality and consistency of replicates across experimental conditions and explore broad expression patterns among samples, (ii) to identify genes that exhibit differential expression in response to changes in environmental or genetic conditions, and (iii) to uncover and characterise distinct expression patterns within the subset of differentially expressed genes. Together, these analyses aim to generate a robust statistical evidence that can guide downstream biological interpretation, helping researchers to prioritise candidate genes for further functional investigation into the mechanisms underlying cell wall stress in *C. neoformans*.
+
+The remainder of this report is organised as follows: @sec-methods provides a concise yet comprehensive overview of the methods and techniques used for RNA-seq data processing and differential expression analysis. @sec-results presents the key findings in relation to the analytical aims. Finally, @sec-conclusions summarises the main results and discusses potential limitations and opportunities for further refinement. Additional supporting information is provided in the Appendix.
+
+ 
+
+
+
+
+
