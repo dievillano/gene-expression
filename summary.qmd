@@ -1,0 +1,13 @@
+# Executive summary {.unnumbered}
+
+This report analyses RNA-seq data from an experiment designed to understand how *Cryptococcus neoformans* responds to cell wall stress under varying genetic and environmental conditions, with a focus on the FLC1 gene, a candidate antifungal drug target. Cells from wild-type and FLC1Δ strains were grown under combinations of temperature (30°C or 37°C) and growth media (YPD, with or without CFW and/or EGTA), simulating stress conditions.
+
+The analysis confirmed strong biological replicate consistency of the experimental data and revealed that strain background shaped the response to stress: FLC1Δ cells displayed more pronounced expression changes, particularly in response to CFW and at higher temperatures. Key driver genes of this variation included FLC1 gene itself (CNAG_04283), as well as CNAG_01653, CNAG_04891, and CNAG_00588. 
+
+Differential expression analysis identified over 3,400 genes (52.4%) with significant changes related to the interaction of the experimental factors, especially when contrasting the FLC1Δ strain under compound stress (CFW + EGTA at 37°C) with the wild-type strain under basal medium at 37°C, where most were downregulated. One gene, CNAG_06576, showed consistent high significance and condition-specific regulation. Clustering the top 500 most informative DE genes revealed four major expression patterns, primarily driven by strain and stress condition, with one cluster reflecting stress-induced repression in the mutant FLC1Δ strain.
+
+The findings suggest FLC1 plays a key role in mediating the transcriptional stress response. A ranked list of the top 100 DE genes is provided for future functional characterisation. While robust, the results are based on a single DE method (`DESeq2`), and could be further validated using complementary statistical methods.
+
+
+
+

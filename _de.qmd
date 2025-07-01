@@ -6,6 +6,8 @@ editor: source
 
 ## Reading data 
 
+Reading RNA-seq count data:
+
 ```{r}
 counts_raw <- readr::read_delim(
   "data/GSE292021_counts_quantseq_CryptoRNAseqFLC1.txt", delim = "\t",
@@ -15,6 +17,8 @@ colnames(counts_raw)[1:6] <- c(
   "gene", "chr", "start", "end", "strand", "length"
 )
 ```
+
+Reading metadata for RNA-seq samples:
 
 ```{r}
 samples_raw <- readr::read_delim(
@@ -30,6 +34,8 @@ samples_raw <- readr::read_delim(
 
 ## Preprocessing
 
+Loading necessary libraries:
+
 ```{r}
 library(dplyr)
 library(tidyr)
@@ -37,10 +43,14 @@ library(ggplot2)
 theme_set(theme_classic())
 ```
 
+Creating a tidy metadata table for samples:
+
 ```{r}
 samples <- samples_raw |> 
   mutate(
-    temperature = factor(temperature, levels = c("37", "30")),
+    temperature = factor(
+      temperature, levels = c("37", "30")  # 37 is set as reference
+    ), 
     media = factor(
       media, levels = unique(media), labels = c("Y", "YC", "YE", "YCE")
     ),
@@ -51,14 +61,20 @@ samples <- samples_raw |>
   select(-c(bio_rep, sample_name, flc1))
 ```
 
+Subsetting the count matrix to include only metadata and selected sample columns:
+
 ```{r}
 counts <- counts_raw |> 
   select(c(names(counts_raw)[1:6], samples$sample))
 ```
 
+Checking the dimensions of the count matrix:
+
 ```{r}
 dim(counts)
 ```
+
+Reshaping counts from wide to long format and joining with sample metadata:
 
 ```{r}
 counts_long <- counts |> 
@@ -66,6 +82,8 @@ counts_long <- counts |>
   left_join(samples, by = c("sample" = "sample")) |> 
   mutate(sample = factor(sample, levels = samples$sample))
 ```
+
+Summarising count distribution for each gene across all samples:
 
 ```{r}
 gene_summary <- counts_long |> 
@@ -79,9 +97,13 @@ gene_summary |>
   slice_head(n = 20)
 ```
 
+Saving gene-level summary statistics:
+
 ```{r}
 readr::write_csv(gene_summary, file = "results/gene_summary.csv")
 ```
+
+Calculating total library size per sample:
 
 ```{r}
 sample_summary <- counts_long |> 
@@ -92,9 +114,13 @@ sample_summary |>
   slice_head(n = 20)
 ```
 
+Saving sample-level library size summary:
+
 ```{r}
 readr::write_csv(sample_summary, file = "results/sample_summary.csv")
 ```
+
+Plotting library sizes for each sample grouped by condition:
 
 ```{r}
 libsizes_plot <- counts_long |> 
@@ -110,9 +136,13 @@ libsizes_plot <- counts_long |>
 libsizes_plot
 ```
 
+Saving the library size plot:
+
 ```{r}
 ggsave("figures/lib_sizes.pdf", libsizes_plot, width = 7, height = 4.2)
 ```
+
+Creating a numeric matrix of raw counts for downstream analysis:
 
 ```{r}
 counts_mat <- counts |> 
@@ -123,9 +153,13 @@ counts_mat <- counts |>
 
 ### Pre-filtering
 
+Loading edgeR package for count data filtering:
+
 ```{r}
 library(edgeR)
 ```
+
+Creating the design matrix for the main and interactions effects:
 
 ```{r}
 design <- model.matrix(
@@ -134,15 +168,21 @@ design <- model.matrix(
 )
 ```
 
+Filtering genes with low counts:
+
 ```{r}
 genes_keep <- filterByExpr(
   counts_mat, design = design, min.count = 10, min.total.count = 15
 )
 ```
 
+Saving the logical vector indicating which genes pass the filter:
+
 ```{r}
 saveRDS(genes_keep, file = "results/genes_keep.rds")
 ```
+
+Subsetting the count matrix to include only filtered genes:
 
 ```{r}
 counts_filter_mat <- counts_mat[genes_keep, ]
@@ -150,21 +190,31 @@ counts_filter_mat <- counts_mat[genes_keep, ]
 
 ### Normalization and transformation
 
+Creating a list to store the full and filtered count matrices for further processing:
+
 ```{r}
 counts_mats <- list(full = counts_mat, filter = counts_filter_mat)
 ```
+
+Creating a data frame linking the type of count matrix with the matrix itself:
 
 ```{r}
 counts_mats_df <- tibble(type = c("full", "filter"), mat = counts_mats)
 ```
 
+Defining transformation methods to be applied to count data:
+
 ```{r}
 transform_methods <- c("cpm", "logcpm", "rlog", "vst")
 ```
 
+Loading tidyr for data manipulation functions used below:
+
 ```{r}
 library(tidyr)
 ```
+
+Generating all combinations of count matrix types and transformation methods:
 
 ```{r}
 mats <- expand_grid(
@@ -173,13 +223,19 @@ mats <- expand_grid(
   relocate(method, .before = mat)
 ```
 
+Loading DESeq2 package, which provides rlog and vst transformations:
+
 ```{r}
 library(DESeq2)
 ```
 
+Function to apply selected normalization/transformation method to a count matrix:
+
 ```{r}
 get_transform <- function(mat, method = "cpm", blind = TRUE) {
-  if (!(method %in% c("cpm", "logcpm", "rlog", "vst"))) stop("Method not available.")
+  if (!(method %in% c("cpm", "logcpm", "rlog", "vst"))) {
+    stop("Method not available.")
+  }
   
   if (method == "cpm") {
     mat_transform <- cpm(mat, normalized.lib.sizes = FALSE, log = FALSE)
@@ -195,9 +251,13 @@ get_transform <- function(mat, method = "cpm", blind = TRUE) {
 }
 ```
 
+Loading purrr package for functional programming:
+
 ```{r}
 library(purrr)
 ```
+
+Applying all transformations to each count matrix and storing results:
 
 ```{r}
 transformed <- mats |> 
@@ -208,6 +268,8 @@ transformed <- mats |>
   ) |> 
   select(-mat)
 ```
+
+Converting each transformed matrix to a long-format dataframe joined with sample metadata for plotting:
 
 ```{r}
 transformed <- transformed |> 
@@ -226,15 +288,21 @@ transformed <- transformed |>
   )
 ```
 
+Filtering to include only the filtered count matrix data for plotting:
+
 ```{r}
 transformed_filter <- transformed |> 
   filter(type == "filter") |> 
   select(method, df) |> 
   unnest(df) |> 
   mutate(
-    method_factor = factor(method, labels = c("CPM*", "log2-CPM", "rlog", "VST"))
+    method_factor = factor(
+      method, labels = c("CPM*", "log2-CPM", "rlog", "VST")
+    )
   )
 ```
+
+Creating boxplots of expression distributions across samples and conditions for each transformation method:
 
 ```{r}
 transformed_filter_boxplot <- transformed_filter |> 
@@ -248,9 +316,16 @@ transformed_filter_boxplot <- transformed_filter |>
 transformed_filter_boxplot
 ```
 
+Saving the boxplots:
+
 ```{r}
-ggsave("figures/transformed_filter_boxplot.pdf", transformed_filter_boxplot, width = 9, height = 7)
+ggsave(
+  "figures/transformed_filter_boxplot.pdf", transformed_filter_boxplot, 
+  width = 9, height = 7
+)
 ```
+
+Plotting the relationship between mean expression rank and standard deviation for each gene across methods:
 
 ```{r}
 meansd_plot <- transformed_filter |> 
@@ -270,16 +345,20 @@ meansd_plot <- transformed_filter |>
 meansd_plot
 ```
 
+Save the mean-SD relationship plot:
+
 ```{r}
 ggsave("figures/meansd_plot.pdf", meansd_plot, width = 6, height = 4)
 ```
 
-### EDA
+### Exploratory analysis
+
+Load PCAtools package for performing principal component analysis (PCA):
 
 ```{r}
-# library(factoextra)
 library(PCAtools)
 ```
+Perform PCA on the transformed data:
 
 ```{r}
 pca_results <- transformed |> 
@@ -300,6 +379,8 @@ pca_results <- transformed |>
   )
 ```
 
+Extract and unnest the number of components and variance explained:
+
 ```{r}
 pca_results_comp <- pca_results |> 
   select(type, method, n_comp, var_explained) |> 
@@ -308,15 +389,21 @@ pca_results_comp <- pca_results |>
 pca_results_comp
 ```
 
+Save PCA component summary results:
+
 ```{r}
 readr::write_csv(pca_results_comp, "results/pca_results_comp.csv")
 ```
+
+Filter PCA results for the specific rlog transformed filtered data:
 
 ```{r}
 pca_results_rlog <- filter(pca_results, type == "filter", method == "rlog")
 pca_rlog <- pca_results_rlog$pca[[1]]
 ncomp_rlog <- pca_results_rlog$n_comp[[1]]
 ```
+
+Create a scree plot showing variance explained by each principal component:
 
 ```{r}
 screeplot_rlog <- screeplot(
@@ -330,9 +417,13 @@ screeplot_rlog <- screeplot(
 screeplot_rlog
 ```
 
+Save scree plot:
+
 ```{r}
 ggsave("figures/screeplot_rlog.pdf", screeplot_rlog, width = 4, height = 3)
 ```
+
+Set colour palettes for plotting samples by different factors:
 
 ```{r}
 pal <- ggsci::pal_bmj()(8)
@@ -353,8 +444,12 @@ conditions_pal <- list(
 )
 ```
 
+Function to plot PCA scores for two principal components with sample metadata colouring:
+
 ```{r}
-plot_pca_rotations <- function(pca_results, metadata, colour_by, shape_by = NULL, pc_x = 1, pc_y = 2, point_size = 2) {
+plot_pca_rotations <- function(pca_results, metadata, colour_by, 
+                               shape_by = NULL, pc_x = 1, pc_y = 2, 
+                               point_size = 2) {
 
   rotations <- as.data.frame(pca_results$rotated)
   variance <- pca_results$variance
@@ -397,12 +492,16 @@ plot_pca_rotations <- function(pca_results, metadata, colour_by, shape_by = NULL
 }
 ```
 
+Extract PCA results for rlog filtered data:
+
 ```{r}
 pca_rlog <- pca_results |> 
   filter(type == "filter", method == "rlog") |> 
   pull(pca) |> 
   magrittr::extract2(1) 
 ```
+
+Plot PC1 vs PC2 coloured by condition:
 
 ```{r}
 pca12_rlog_plot <- plot_pca_rotations(
@@ -413,6 +512,8 @@ pca12_rlog_plot <- plot_pca_rotations(
 pca12_rlog_plot
 ```
 
+Plot PC1 vs PC3 coloured by condition:
+
 ```{r}
 pca13_rlog_plot <- plot_pca_rotations(
   pca_rlog, metadata = samples, pc_y = 3, colour_by = "condition"
@@ -421,6 +522,8 @@ pca13_rlog_plot <- plot_pca_rotations(
 
 pca13_rlog_plot
 ```
+
+Plot PC2 vs PC3 coloured by condition:
 
 ```{r}
 pca23_rlog_plot <- plot_pca_rotations(
@@ -431,9 +534,13 @@ pca23_rlog_plot <- plot_pca_rotations(
 pca23_rlog_plot
 ```
 
+Load patchwork for combining plots:
+
 ```{r}
 library(patchwork)
 ```
+
+Combine all three PCA plots into one layout:
 
 ```{r}
 pca_rlog_plot <- pca12_rlog_plot + pca13_rlog_plot + pca23_rlog_plot + 
@@ -443,9 +550,13 @@ pca_rlog_plot <- pca12_rlog_plot + pca13_rlog_plot + pca23_rlog_plot +
 pca_rlog_plot
 ```
 
+Save combined PCA plots:
+
 ```{r}
 ggsave("figures/pca_rlog_plot.pdf", pca_rlog_plot, width = 12, height = 8)
 ```
+
+Plot PC1 vs PC2 coloured by strain, shaped by media:
 
 ```{r}
 pca12_rlog_fact_plot <- plot_pca_rotations(
@@ -459,17 +570,23 @@ pca12_rlog_fact_plot <- plot_pca_rotations(
 pca12_rlog_fact_plot
 ```
 
+Plot PC1 vs PC3 coloured by temperature, shaped by strain:
+
 ```{r}
 pca13_rlog_fact_plot <- plot_pca_rotations(
   pca_rlog, metadata = samples, colour_by = "temperature", 
   shape_by = "strain", pc_x = 1, pc_y = 3
 ) +
-  scale_color_discrete(name = "Temperature", type = conditions_pal$temperature) +
+  scale_color_discrete(
+    name = "Temperature", type = conditions_pal$temperature
+  ) +
   scale_shape_discrete(name = "Strain") +
   theme(legend.position = "top")
 
 pca13_rlog_fact_plot
 ```
+
+Plot PC2 vs PC3 coloured by media, shaped by temperature:
 
 ```{r}
 pca23_rlog_fact_plot <- plot_pca_rotations(
@@ -482,6 +599,8 @@ pca23_rlog_fact_plot <- plot_pca_rotations(
 
 pca23_rlog_fact_plot
 ```
+
+Function to plot PCA loadings (gene contributions) for top features on two PCs:
 
 ```{r}
 plot_pca_loadings <- function(pca_results, pc_x = 1, pc_y = 2, top_n = 5) {
@@ -527,6 +646,8 @@ plot_pca_loadings <- function(pca_results, pc_x = 1, pc_y = 2, top_n = 5) {
 }
 ```
 
+Plot loadings for PC1 vs PC2:
+
 ```{r}
 pca12_rlog_load_plot <- plot_pca_loadings(
   pca_rlog, pc_x = 1, pc_y = 2, top_n = 5
@@ -534,6 +655,8 @@ pca12_rlog_load_plot <- plot_pca_loadings(
 
 pca12_rlog_load_plot
 ```
+
+Plot loadings for PC1 vs PC3:
 
 ```{r}
 pca13_rlog_load_plot <- plot_pca_loadings(
@@ -543,6 +666,8 @@ pca13_rlog_load_plot <- plot_pca_loadings(
 pca13_rlog_load_plot
 ```
 
+Plot loadings for PC2 vs PC3:
+
 ```{r}
 pca23_rlog_load_plot <- plot_pca_loadings(
   pca_rlog, pc_x = 2, pc_y = 3, top_n = 5
@@ -551,19 +676,30 @@ pca23_rlog_load_plot <- plot_pca_loadings(
 pca23_rlog_load_plot
 ```
 
+Combine and arrange the PCA biplots and loading plots into a composite figure:
+
 ```{r}
 pca_rlog_full_plot <- 
-  ((pca12_rlog_fact_plot + pca12_rlog_load_plot) + plot_layout(tag_level = "new")) /
-  ((pca13_rlog_fact_plot + pca13_rlog_load_plot) + plot_layout(tag_level = "new")) /
-  ((pca23_rlog_fact_plot + pca23_rlog_load_plot) + plot_layout(tag_level = "new")) +
+  ((pca12_rlog_fact_plot + pca12_rlog_load_plot) + 
+     plot_layout(tag_level = "new")) /
+  ((pca13_rlog_fact_plot + pca13_rlog_load_plot) + 
+     plot_layout(tag_level = "new")) /
+  ((pca23_rlog_fact_plot + pca23_rlog_load_plot) + 
+     plot_layout(tag_level = "new")) +
   plot_annotation(tag_levels = c("A", "1"))
 
 pca_rlog_full_plot
 ```
 
+Save the full PCA summary plot:
+
 ```{r}
-ggsave("figures/pca_rlog_full_plot.pdf", pca_rlog_full_plot, width = 12, height = 12)
+ggsave(
+  "figures/pca_rlog_full_plot.pdf", pca_rlog_full_plot, width = 12, height = 12
+)
 ```
+
+Function to visualise the top contributing genes to selected PCs as barplots:
 
 ```{r}
 plot_top_loadings_barplot <- function(pca_results, n_top = 10, pcs = 1:3) {
@@ -607,14 +743,22 @@ plot_top_loadings_barplot <- function(pca_results, n_top = 10, pcs = 1:3) {
 }
 ```
 
+Generate the top-loading genes barplot for PCs 1–3:
+
 ```{r}
 pca_rlog_load_plot <- plot_top_loadings_barplot(pca_rlog)
 pca_rlog_load_plot
 ```
 
+Save the top-loadings barplot:
+
 ```{r}
-ggsave("figures/pca_rlog_load_plot.pdf", pca_rlog_load_plot, width = 7, height = 5.5)
+ggsave(
+  "figures/pca_rlog_load_plot.pdf", pca_rlog_load_plot, width = 7, height = 5.5
+)
 ```
+
+Prepare the PCA scores (sample coordinates) with metadata:
 
 ```{r}
 scores <- pca_rlog$rotated |>
@@ -623,13 +767,19 @@ scores <- pca_rlog$rotated |>
   left_join(samples, by = "sample")
 ```
 
+Extract names of the first 3 principal components:
+
 ```{r}
 pc_names <- colnames(pca_rlog$rotated)[1:3]
 ```
 
+Define metadata variables (experimental factors):
+
 ```{r}
 factors <- c("strain", "media", "temperature")
 ```
+
+Perform one-way ANOVA for each PC against each experimental factor:
 
 ```{r}
 anova_results <- expand_grid(pc = pc_names, factor = factors) |> 
@@ -659,6 +809,8 @@ anova_results <- expand_grid(pc = pc_names, factor = factors) |>
   )
 ```
 
+Visualise ANOVA results as a heatmap:
+
 ```{r}
 anova_plot <- ggplot(anova_results, aes(x = pc, y = factor, fill = sig)) +
   geom_tile(color = "white") +
@@ -680,13 +832,15 @@ anova_plot <- ggplot(anova_results, aes(x = pc, y = factor, fill = sig)) +
 anova_plot
 ```
 
+Save the ANOVA heatmap plot:
+
 ```{r}
 ggsave("figures/anova_plot.pdf", anova_plot, width = 5, height = 3)
 ```
 
-
-
 ### Differential expression analysis
+
+Fit DESeq2 model to both the full and filtered count matrices:
 
 ```{r}
 de_dfs <- counts_mats_df |> 
@@ -703,7 +857,7 @@ de_dfs <- counts_mats_df |>
   )
 ```
 
-Based on https://github.com/thelovelab/DESeq2/blob/devel/R/plots.R
+Function to visualise dispersion estimates from a DESeq2 object. Based on https://github.com/thelovelab/DESeq2/blob/devel/R/plots.R:
 
 ```{r}
 plot_dispersion <- function(object, size = 0.5) {
@@ -740,15 +894,21 @@ plot_dispersion <- function(object, size = 0.5) {
 }
 ```
 
+Generate dispersion plot for the full dataset:
+
 ```{r}
 dispersion_full_plot <- plot_dispersion(de_dfs$de[[1]], size = 0.8)
 dispersion_full_plot
 ```
 
+Generate dispersion plot for the filtered dataset:
+
 ```{r}
 dispersion_filter_plot <- plot_dispersion(de_dfs$de[[2]], size = 0.8)
 dispersion_filter_plot
 ```
+
+Combine the dispersion plots for full and filtered datasets into a single figure:
 
 ```{r}
 dispersion_plot <- dispersion_full_plot / dispersion_filter_plot + 
@@ -757,14 +917,19 @@ dispersion_plot <- dispersion_full_plot / dispersion_filter_plot +
 dispersion_plot
 ```
 
+Save combined dispersion plot:
 
 ```{r}
 ggsave("figures/dispersion_plot.pdf", dispersion_plot, width = 8, height = 6)
 ```
 
+Extract result coefficient names (excluding intercept) from the full model:
+
 ```{r}
 res_names <- resultsNames(de_dfs$de[[1]])[-1]
 ```
+
+Define contrasts for each coefficient (for Wald tests):
 
 ```{r}
 de_contrasts <- tibble::tibble(term = res_names) |> 
@@ -776,6 +941,8 @@ de_contrasts <- tibble::tibble(term = res_names) |>
   )
 ```
 
+Combine differential expression results with metadata for plotting and filtering:
+
 ```{r}
 de_results <- tidyr::expand_grid(de_dfs, de_contrasts) |> 
   select(-c(mat, de_df)) |> 
@@ -783,8 +950,11 @@ de_results <- tidyr::expand_grid(de_dfs, de_contrasts) |>
     term_fct = factor(
       term, levels = res_names,
       labels = c(
-        "Strain (FL)", "Media (YC)", "Media (YE)", "Media (YCE)", "Temperature (30)",
-        "Strain (FL) + Media (YC)", "Strain (FL) + Media (YE)", 
+        "Strain (FL)", "Media (YC)", 
+        "Media (YE)", "Media (YCE)", 
+        "Temperature (30)",
+        "Strain (FL) + Media (YC)", 
+        "Strain (FL) + Media (YE)", 
         "Strain (FL) + Media (YCE)", 
         "Strain (FL) + Temperature (30)"
       )
@@ -798,6 +968,8 @@ de_results <- tidyr::expand_grid(de_dfs, de_contrasts) |>
   )
 ```
 
+Run DESeq2 Wald tests and shrink log2 fold changes using apeglm:
+
 ```{r}
 de_results <- de_results |> 
   mutate(
@@ -810,7 +982,9 @@ de_results <- de_results |>
     ),
     result_shrink = pmap(
       list(a = de, b = result, c = term), 
-      \(a, b, c) lfcShrink(dds = a, coef = c, res = b , type = "apeglm")
+      \(a, b, c) lfcShrink(
+        dds = a, coef = c, res = b , type = "apeglm", parallel = TRUE
+      )
     ), 
     result_df = map(
       result_shrink,
@@ -832,16 +1006,22 @@ de_results <- de_results |>
   )
 ```
 
+Flatten the nested results into a single data frame for downstream use:
+
 ```{r}
 de_results_df <- de_results |> 
   select(type, term, term_fct, term_type, result_df) |> 
   unnest(result_df)
 ```
 
+Subset the results to keep only interaction terms for the full dataset:
+
 ```{r}
 de_results_df_full <- de_results_df |> 
   filter(type == "full", term_type == "interaction")
 ```
+
+Visualise p-value distributions for interaction terms in the full dataset:
 
 ```{r}
 de_results_df_full |> 
@@ -851,10 +1031,14 @@ de_results_df_full |>
   geom_histogram(fill = "gray", colour = "black", breaks = 0:20/20) 
 ```
 
+Subset interaction results from the filtered dataset:
+
 ```{r}
 de_results_df_filter <- de_results_df |> 
   filter(type == "filter", term_type == "interaction")
 ```
+
+Plot p-value histograms for the filtered dataset's interaction terms:
 
 ```{r}
 pvalue_hist <- de_results_df_filter |> 
@@ -867,9 +1051,13 @@ pvalue_hist <- de_results_df_filter |>
 pvalue_hist
 ```
 
+Save the p-value histogram plots:
+
 ```{r}
 ggsave("figures/pvalue_hist.pdf", pvalue_hist, width = 6, height = 5)
 ```
+
+Summarise DE results for interaction terms:
 
 ```{r}
 results_terms <- de_results_df |> 
@@ -886,9 +1074,8 @@ results_terms <- de_results_df |>
 results_terms
 ```
 
-```{r}
-readr::write_csv(results_terms, "results/results_terms.csv")
-```
+
+Generate MA plot of log2 fold change vs log2 mean expression, coloured by significance:
 
 ```{r}
 ma_plot <- de_results_df_filter |>
@@ -907,9 +1094,13 @@ ma_plot <- de_results_df_filter |>
 ma_plot
 ```
 
+Save MA plot:
+
 ```{r}
 ggsave("figures/ma_plot.pdf", ma_plot, width = 8, height = 5.5)
 ```
+
+Extract detected genes (significant DE) from each result and reshape into wide format for comparison:
 
 ```{r}
 detected <- de_results |> 
@@ -923,13 +1114,18 @@ detected <- de_results |>
   ) |> 
   select(type, term, term_fct, term_type, detected) |> 
   pivot_wider(
-    id_cols = c(term, term_fct, term_type), names_from = type, values_from = detected
+    id_cols = c(term, term_fct, term_type), names_from = type, 
+    values_from = detected
   ) 
 ```
+
+Load ComplexHeatmap package for UpSet plot generation:
 
 ```{r}
 library(ComplexHeatmap)
 ```
+
+Create combination matrices and UpSet plots comparing genes detected in full vs filtered data:
 
 ```{r}
 detected <- detected |> 
@@ -952,9 +1148,13 @@ detected <- detected |>
   )
 ```
 
+Display first UpSet plot:
+
 ```{r}
 detected$upset_plot[[1]]
 ```
+
+Extract detected gene lists for interaction terms only:
 
 ```{r}
 detected_inter <- detected |> 
@@ -965,9 +1165,13 @@ detected_inter_list <- detected_inter$filter
 names(detected_inter_list) <- detected_inter$term_fct
 ```
 
+Create combination matrix for interaction terms only:
+
 ```{r}
 comb_mat_inter <- make_comb_mat(detected_inter_list)
 ```
+
+Generate UpSet plot showing overlap of DE genes across interaction terms:
 
 ```{r}
 upset_plot <- UpSet(
@@ -985,11 +1189,15 @@ upset_plot <- UpSet(
 upset_plot
 ```
 
+Save UpSet plot:
+
 ```{r}
 pdf(file = "figures/upset_plot.pdf", width = 6.5, height = 3.5)
 draw(upset_plot)
 dev.off()
 ```
+
+Prepare data for volcano plot:
 
 ```{r}
 volcano_data <- de_results_df_filter |>
@@ -1004,10 +1212,14 @@ volcano_data <- de_results_df_filter |>
   ungroup()
 ```
 
+Select top 10 genes per contrast based on lowest adjusted p-value:
+
 ```{r}
 top_genes_volcano <- volcano_data |>
   filter(rank <= 10)
 ```
+
+Generate volcano plot:
 
 ```{r}
 volcano_plot <- volcano_data |> 
@@ -1038,9 +1250,13 @@ volcano_plot <- volcano_data |>
 volcano_plot
 ```
 
+Save volcano plot:
+
 ```{r}
 ggsave("figures/volcano_plot.pdf", volcano_plot, height = 8.5, width = 11)
 ```
+
+Identify genes that appear in the top 10 of multiple contrasts:
 
 ```{r}
 repeated_top_genes <- top_genes_volcano |>
@@ -1049,9 +1265,13 @@ repeated_top_genes <- top_genes_volcano |>
   arrange(desc(n_contrasts))
 ```
 
+Save list of frequently top-ranked genes across contrasts:
+
 ```{r}
 readr::write_csv(repeated_top_genes, "results/repeated_top_genes.csv")
 ```
+
+Extract all significantly DE genes from filtered results:
 
 ```{r}
 detected_genes <- de_results_df_filter |> 
@@ -1060,6 +1280,8 @@ detected_genes <- de_results_df_filter |>
   pull(gene) |> 
   unique()
 ```
+
+Prepare transformed and scaled expression matrices for clustering:
 
 ```{r}
 clustering <- mats |> 
@@ -1082,6 +1304,8 @@ clustering <- mats |>
   select(-c(mat, genes_var, genes_keep, transformed))
 ```
 
+Custom clustering function using Pearson distance and Ward's method:
+
 ```{r}
 hclust_pearson <- function(x, k) {
   d <- as.dist(1 - cor(t(x), method = "pearson"))  
@@ -1090,6 +1314,8 @@ hclust_pearson <- function(x, k) {
   list(cluster = cutree(hc, k = k))
 }
 ```
+
+Compute gap statistic plots for each transformation method:
 
 ```{r}
 gap_plots <- clustering |> 
@@ -1104,19 +1330,27 @@ gap_plots <- clustering |>
   )
 ```
 
+Display all gap statistic plots:
+
 ```{r}
 walk(gap_plots$gap_plot, print)
 ```
 
+Save gap statistic for rlog transformed data:
+
 ```{r}
 ggsave("figures/gap_plot.pdf", gap_plots$gap_plot[[2]], width = 6, height = 4)
 ```
+
+Prepare sample annotation dataframe for heatmap:
 
 ```{r}
 samples_heatmap <- samples |> 
   tibble::column_to_rownames(var = "sample") |> 
   select(strain, media, temperature)
 ```
+
+Create annotation for heatmap columns:
 
 ```{r}
 ha <-  HeatmapAnnotation(
@@ -1128,9 +1362,15 @@ ha <-  HeatmapAnnotation(
 )
 ```
 
+Define colour function for heatmap z-scores:
+
 ```{r}
-col_fun <- circlize::colorRamp2(c(-2, 0, 2), c("#2c7bb6", "#ffffbf", "#d7191c"))
+col_fun <- circlize::colorRamp2(
+  c(-2, 0, 2), c("#2c7bb6", "#ffffbf", "#d7191c")
+)
 ```
+
+Generate clustered heatmaps for each transformation method:
 
 ```{r}
 heatmaps <- clustering |> 
@@ -1154,17 +1394,22 @@ heatmaps <- clustering |>
   )
 ```
 
+Save rlog-based heatmap:
+
 ```{r}
 pdf(file = "figures/heatmap_rlog.pdf", width = 6.5, height = 6)
 heatmaps$heatmap[[2]]
 dev.off()
 ```
 
+Define custom colour palette for clusters:
+
 ```{r}
 cluster_pal <- c("#d00000", "#ffba08", "#3f88c5", "#032b43")
 names(cluster_pal) <- as.character(1:4)
 ```
 
+Generate line plots summarising expression per cluster:
 
 ```{r}
 line_plots <- heatmaps |> 
@@ -1195,8 +1440,13 @@ line_plots <- heatmaps |>
       gene_clust, 
       \(x) x |> 
         group_by(cluster, strain, temperature) |> 
-        summarise(mean = mean(expression), sd = sd(expression), .groups = "drop") |> 
-        ggplot(aes(forcats::fct_rev(temperature), mean, colour = cluster, group = cluster)) +
+        summarise(
+          mean = mean(expression), sd = sd(expression), .groups = "drop"
+        ) |> 
+        ggplot(aes(
+          forcats::fct_rev(temperature), mean, colour = cluster, 
+          group = cluster)
+        ) +
         geom_point() +
         geom_line() +
         geom_hline(yintercept = 0, linetype = "dashed") +
@@ -1208,7 +1458,9 @@ line_plots <- heatmaps |>
       gene_clust, 
       \(x) x |> 
         group_by(cluster, strain, media) |> 
-        summarise(mean = mean(expression), sd = sd(expression), .groups = "drop") |> 
+        summarise(
+          mean = mean(expression), sd = sd(expression), .groups = "drop"
+        ) |> 
         ggplot(aes(media, mean, colour = cluster, group = cluster)) +
         geom_point() +
         geom_line() +
@@ -1220,13 +1472,19 @@ line_plots <- heatmaps |>
   )
 ```
 
+Show cluster profile plots by temperature:
+
 ```{r}
 walk(line_plots$lineplot_temperature, print)
 ```
 
+Show cluster profile plots by media:
+
 ```{r}
 walk(line_plots$lineplot_media, print)
 ```
+
+Combine cluster profile plots into a single figure:
 
 ```{r}
 cluter_profile_plot <- line_plots$lineplot_media[[2]] / 
@@ -1236,9 +1494,13 @@ cluter_profile_plot <- line_plots$lineplot_media[[2]] /
 cluter_profile_plot
 ```
 
+Save combined cluster profile plot:
+
 ```{r}
 ggsave("figures/cluster_profile_plot.pdf", cluter_profile_plot, width = 8, height = 6)
 ```
+
+Merge DE results with gene cluster assignments:
 
 ```{r}
 de_cluster <- line_plots$clust_df[[2]] |> 
@@ -1246,6 +1508,8 @@ de_cluster <- line_plots$clust_df[[2]] |>
 
 de_cluster
 ```
+
+Identify top DE genes based on padj and effect size:
 
 ```{r}
 top_genes <- de_cluster |> 
@@ -1260,10 +1524,11 @@ top_genes <- de_cluster |>
     rank_padj = rank(min_padj, ties.method = "min"),
     avg_rank = (rank_lfc + rank_padj) / 2
   ) |> 
-  # arrange(avg_rank) |> 
-  arrange(min_padj) |> 
+  arrange(avg_rank) |>
   slice_head(n = 100)
 ```
+
+Create matrix of log2 fold changes for heatmap (top 100 DE genes):
 
 ```{r}
 heatmap_matrix <- de_cluster |> 
@@ -1275,12 +1540,16 @@ heatmap_matrix <- de_cluster |>
   as.matrix()
 ```
 
+Create row annotations for the heatmap:
+
 ```{r}
 annotation_df <- line_plots$clust_df[[2]] |> 
   filter(gene %in% top_genes$gene) |> 
   mutate(Cluster = factor(cluster), .keep = "unused") |> 
   tibble::column_to_rownames(var = "gene")
 ```
+
+Draw heatmap of LFCs with cluster annotation:
 
 ```{r}
 heatmap_lfc <- pheatmap(
@@ -1300,13 +1569,12 @@ heatmap_lfc <- pheatmap(
   fontsize = 7,
   fontsize_row = 6,
   fontsize_col = 7
-  # color = colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(100),
-  # breaks = seq(-3, 3, length.out = 101),
-  # fontsize_row = 6
 )
 
 draw(heatmap_lfc)
 ```
+
+Save LFC heatmap to file:
 
 ```{r}
 pdf(file = "figures/heatmap_lfc.pdf", width = 5, height = 9.5)
@@ -1314,280 +1582,4 @@ draw(heatmap_lfc)
 dev.off()
 ```
 
-
-
-
-----------------------------
-
-```{r}
-pca_plots <- pca_results |> 
-  mutate(
-    pca_plot_12 = pmap(
-      list(a = type, b = method, c = pca), 
-      \(a, b, c) {
-        biplot(
-          c, x = "PC1", y = "PC2", showLoadings = TRUE, colby = "strain", 
-          shape = "media", hline = 0, vline = 0, legendPosition = "right", 
-          ntopLoadings = 10, max.overlaps = 50, lengthLoadingsArrowsFactor = 3,
-          xlim = c(-100, 100), ylim = c(-50, 50)
-        ) +
-          ggtitle(paste0(b, " transformation - ", a))
-      }
-    ),
-    pca_plot_13 = pmap(
-      list(a = type, b = method, c = pca), 
-      \(a, b, c) {
-        biplot(
-          c, x = "PC1", y = "PC3", showLoadings = TRUE, colby = "strain",
-          shape = "temperature", hline = 0, vline = 0, legendPosition = "right", 
-          ntopLoadings = 10, max.overlaps = 50, lengthLoadingsArrowsFactor = 3
-        ) +
-          ggtitle(paste0(b, " transformation - ", a))
-      }
-    ),
-    pca_plot_23 = pmap(
-      list(a = type, b = method, c = pca), 
-      \(a, b, c) {
-        biplot(
-          c, x = "PC2", y = "PC3", showLoadings = TRUE, colby = "media",
-          shape = "temperature", hline = 0, vline = 0, legendPosition = "right", 
-          ntopLoadings = 10, max.overlaps = 50, lengthLoadingsArrowsFactor = 3
-        ) +
-          ggtitle(paste0(b, " transformation - ", a))
-      }
-    )
-  )
-```
-
-```{r}
-for (plt in pca_results$pca_plot_12) print(plt)
-```
-
-```{r}
-for (plt in pca_results$pca_plot_13) print(plt)
-```
-
-```{r}
-for (plt in pca_results$pca_plot_23) print(plt)
-```
-
-```{r}
-pca_results <- pca_results |> 
-  mutate(
-    loadings_plot = pmap(
-      list(a = type, b = method, c = pca), 
-      \(a, b, c) {
-        plotloadings(
-          c, components = getComponents(c, 1:3), rangeRetain = 0.01) +
-          ggtitle(paste0(b, " transformation - ", a)
-        )
-      }
-    ),
-    loadings = map(
-      pca, \(x) getLoadings(x, components = getComponents(x, 1:3))
-    )
-  )
-```
-
-```{r}
-for (plt in pca_results$loadings_plot) print(plt)
-```
-
-```{r}
-pca_boxplot <- function(pca, cond, type, method) {
-  pca$rotated |> 
-    tibble::rownames_to_column(var = "sample") |> 
-    select(c(sample, PC1:PC3)) |> 
-    inner_join(samples, by = c("sample" = "sample")) |> 
-    pivot_longer(cols = PC1:PC3) |> 
-    ggplot(aes({{cond}}, value)) +
-    geom_boxplot() +
-    facet_wrap(vars(name), ncol = 3) +
-    ggtitle(paste0(method, " transformation - ", type))
-}
-```
-
-```{r}
-pca_results <- pca_results |> 
-  mutate(
-    boxplot_strain = pmap(
-      list(a = type, b = method, c = pca), 
-      \(a, b, c) pca_boxplot(c, strain, a, b)
-    ),
-    boxplot_media = pmap(
-      list(a = type, b = method, c = pca), 
-      \(a, b, c) pca_boxplot(c, media, a, b)
-    ),
-    boxplot_temperature = pmap(
-      list(a = type, b = method, c = pca), 
-      \(a, b, c) pca_boxplot(c, temperature, a, b)
-    )
-  )
-```
-
-```{r}
-for (plt in pca_results$boxplot_strain) print(plt)
-```
-
-```{r}
-for (plt in pca_results$boxplot_media) print(plt)
-```
-
-```{r}
-for (plt in pca_results$boxplot_temperature) print(plt)
-```
-
-```{r}
-removed_by_filter <- de_results |> 
-  mutate(
-    removed_genes = map(
-      result_df, 
-      \(x) x |> filter(is.na(padj)) |> pull(gene) 
-    )
-  ) |> 
-  select(type, term, removed_genes) |> 
-  pivot_wider(
-    id_cols = term, names_from = type, values_from = removed_genes
-  ) 
-
-removed_by_filter
-```
-
-```{r}
-de_results <- de_results |> 
-  mutate(
-    top_labels = map(
-      result_df,
-      \(x) x |> 
-        drop_na(padj) |> 
-        arrange(padj) |> 
-        slice_head(n = 10) |> 
-        pull(gene)
-    ),
-    ma_plot = pmap(
-      list(a = type, b = term, c = result, d = top_labels),
-      \(a, b, c, d) {
-        ggpubr::ggmaplot(
-          c, fdr = 0.1, fc = 1, size = 0.5, main = paste0(b, " - ", a),
-          top = 0, label.select = d
-        )
-      }
-    ),
-    volcano_plot = pmap(
-      list(a = type, b = term, c = result_df, d = top_labels),
-      \(a, b, c, d) {
-        EnhancedVolcano::EnhancedVolcano(
-          c, lab = c$gene, x = "log2FoldChange", y = "padj", 
-          title = paste0(b, " - ", a), subtitle = NULL, caption = NULL, 
-          pCutoff = 0.1, FCcutoff = 0, pointSize = 0.5, selectLab = d,
-          drawConnectors = TRUE, arrowheads = FALSE
-        )
-      } 
-    ),
-    pvalue_plot = pmap(
-      list(a = type, b = term, c = result_df, d = result),
-      \(a, b, c, d) {
-        c |>
-          filter(baseMean > metadata(d)$filterThreshold) |>
-          ggplot(aes(pvalue)) +
-          geom_histogram(breaks = 0:20/20) +
-          ggtitle(paste0(b, " - ", a))
-      }
-    )
-  )
-```
-
-```{r}
-inter_terms <- c(
-  "straindelta.mediaYPD_CFW", "straindelta.mediaYPD_EGTA",
-  "straindelta.mediaYPD_CFW_EGTA", "straindelta.temperature30"
-)
-
-de_results_inter <- de_results |> 
-  filter(type == "filter", term %in% inter_terms)
-```
-
-```{r}
-for (plt in de_results_inter$ma_plot) print(plt)
-```
-```{r}
-for (plt in de_results_inter$volcano_plot) print(plt)
-```
-
-
-```{r}
-for (plt in de_results_inter$pvalue_plot) print(plt)
-```
-
-
-
-```{r}
-for (plt in detected$upset_plot[4:6]) print(plt)
-```
-
-```{r}
-detected_inter <- detected |> 
-  filter(term %in% inter_terms) |> 
-  select(c(term, filter))
-
-detected_inter_list <- detected_inter$filter
-names(detected_inter_list) <- detected_inter$term
-```
-
-```{r}
-comb_mat_inter <- make_comb_mat(detected_inter_list)
-```
-
-```{r}
-UpSet(
-  comb_mat_inter, 
-  comb_order = order(comb_size(comb_mat_inter), decreasing = TRUE), 
-  top_annotation = upset_top_annotation(comb_mat_inter, add_numbers = TRUE),
-  right_annotation = upset_right_annotation(comb_mat_inter, add_numbers = TRUE)
-)
-```
-
-```{r}
-hm_metadata <- samples |> 
-  tibble::column_to_rownames(var = "sample") |> 
-  select(strain, media, temperature)
-```
-
-```{r}
-counts_mat_top50var <- counts_mat[genes_top50var, ]
-```
-
-```{r}
-count_hm_col <- circlize::colorRamp2(
-  pretty(range(counts_mat_top50var/100), n = 3), 
-  c('#ffffb2','#fecc5c','#fd8d3c','#f03b20','#bd0026')
-)
-```
-
-```{r}
-hm_annotation <-  HeatmapAnnotation(
-  df = hm_metadata, simple_anno_size = unit(0.4, "cm"), 
-  show_annotation_name = TRUE, col = conditions_pal,
-  annotation_label = c("Strain", "Media", "Temperature"), 
-  annotation_name_gp = gpar(fontsize = 7)
-)
-```
-
-```{r}
-counts_hm <- Heatmap(
-  counts_mat_top50var/100, cluster_rows = TRUE, cluster_columns = TRUE, top_annotation = hm_annotation,
-  col = count_hm_col, name = "Raw count\n(x100)", row_names_gp = gpar(fontsize = 7), column_names_gp = gpar(fontsize = 7),
-  row_title = "Genes", row_title_gp = gpar(fontsize = 9), column_title = "Samples", column_title_gp = gpar(fontsize = 9)
-)
-
-draw(counts_hm)
-```
-
-```{r}
-pdf(file = "figures/counts_hm.pdf", width = 6.5, height = 4)
-draw(counts_hm)
-dev.off()
-```
-
------------------------
 

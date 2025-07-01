@@ -1,0 +1,42 @@
+$if(has-frontmatter)$
+\frontmatter
+$endif$
+$if(title)$
+\cleardoublepage
+\thispagestyle{empty}
+\vspace*{2cm}  % Adds top space, adjust as needed
+
+\begin{center}
+  {\huge\bfseries $title$ \par}
+  $if(subtitle)$
+  \vspace{1.5em}
+  
+  {\Large\bfseries $subtitle$ \par}
+  $endif$
+  
+  \vspace{6em}
+
+  $for(by-author)$
+  {\Large\bfseries $by-author.name.literal$ \par}
+  
+  \vspace{2em}
+  {\bfseries\large Master of Science \par}
+  
+  \vspace{1.5em}
+  {\bfseries\large $date$ \par}
+  
+  \vspace{4em}
+
+  $for(by-author.affiliations)$
+  $if(it.department)$
+  {\bfseries\large $it.department$ \par}
+  $endif$
+  
+  {\bfseries\large $it.name$ \par}
+  $endfor$
+  $endfor$
+  
+  \vspace{6em}
+  {\small Dissertation Presented for the Degree of MSc in Statistics with Data Science \par}
+\end{center}
+$endif$

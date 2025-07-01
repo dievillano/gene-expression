@@ -1,21 +1,27 @@
 # Appendix {.unnumbered}
 
-![Library sizes.](figures/lib_sizes.pdf){#suppfig-libsize}
+## Word count
 
-![Boxplots.](figures/transformed_filter_boxplot.pdf){#suppfig-boxplots}
+The total word count on the main text is 4998:
 
-![Mean-SD plot.](figures/meansd_plot.pdf){#suppfig-meansd}
+![](figures/wordcount.png){width=40%}
 
-![Scree plot.](figures/screeplot_rlog.pdf){#suppfig-scree}
+## Suplementary figures
 
-![PCA plot.](figures/screeplot_rlog.pdf){#suppfig-pca}
+![Barplot showing the total number of sequenced reads (in millions) per sample, with bars coloured by experimental condition.](figures/lib_sizes.pdf){#suppfig-libsize}
 
-![PCA plot. displays the samples projected onto principal component axes 1 vs 2 and 2 vs 3, coloured by experimental condition, using the rlog-transformed data](figures/pca_rlog_plot.pdf){#suppfig-pca-rlog}
+![Boxplots of gene expression values by sample, coloured by experimental condition and faceted by transformation method. Note that CPM* denotes normalisation only, without variance stabilisation.](figures/transformed_filter_boxplot.pdf){#suppfig-boxplots}
 
-![Dispersion plot.](figures/dispersion_plot.pdf){#suppfig-dispersion}
+![Mean versus standard deviation plot of gene expression values, faceted by transformation method. The red line indicates the mean-dependent trend in standard deviation. CPM* lacks variance stabilisation, as reflected in its stronger mean–SD dependence.](figures/meansd_plot.pdf){#suppfig-meansd}
 
-![p-value histograms.](figures/pvalue_hist.pdf){#suppfig-pvalue}
+![Scree plot of the rlog-transformed data showing the number of retained principal components based on parallel analysis.](figures/screeplot_rlog.pdf){#suppfig-scree}
 
-![MA plot.](figures/ma_plot.pdf){#suppfig-ma}
+![Samples projected onto pairwise combinations of retained principal components from the rlog-transformed data, coloured by experimental condition.](figures/pca_rlog_plot.pdf){#suppfig-pca-rlog}
 
-![Gap plot.](figures/gap_plot.pdf){#suppfig-gap}
+![Dispersion estimates plotted against mean expression levels. Gray points represent gene-wise dispersion estimates, blue points show shrinkage-based estimates, and the red line indicates the mean-dependent trend. Panel (A) corresponds to unfiltered data, while panel (B) shows filtered data.](figures/dispersion_plot.pdf){#suppfig-dispersion}
+
+![Histograms of unadjusted p-values for each contrast.](figures/pvalue_hist.pdf){#suppfig-pvalue}
+
+![MA plots displaying log2 fold change (LFC) estimates with shrinkage across mean expression levels for each contrast. Red points indicate significantly differentially expressed genes, while gray points represent non-significant genes.](figures/ma_plot.pdf){#suppfig-ma}
+
+![Gap statistic plot showing the optimal number of clusters for the top 500 most variable genes based on rlog-transformed data. The optimal cluster number is indicated by the vertical dashed line.](figures/gap_plot.pdf){#suppfig-gap}

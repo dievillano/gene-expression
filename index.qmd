@@ -1,9 +1,27 @@
-# Preface {.unnumbered}
+# Own work declaration {.unnumbered}
 
-This is a Quarto book.
+**Name**: Diego Cesar Villa Almeyda
 
-To learn more about Quarto books visit <https://quarto.org/docs/books>.
+**Matriculation Number**: S2750743
 
-```{r}
-1 + 1
-```
+**Title of work**: Differential Gene Expression in *Cryptococcus neoformans* Cell Wall Stress Response
+
+I confirm that all this work is my own except where indicated, and that I have:
+
+- Clearly referenced/listed all sources as appropriate.	 				
+-	Referenced and put in inverted commas all quoted text (from books, web, etc)	
+-	Given the sources of all pictures, data etc. that are not my own.				
+-	Not made any use of the report(s) or essay(s) of any other student(s) either past 	
+or present.	
+-	Not sought or used the help of any external professional academic agencies for the work.
+-	Acknowledged in appropriate places any help that I have received from others	(e.g. fellow students, technicians, statisticians, external sources).
+-	Complied with any other plagiarism criteria specified in the Course handbook.
+
+I understand that any false claim for this work will be penalised in accordance with the University regulations	(https://teaching.maths.ed.ac.uk/main/msc-students/msc-programmes/statistics/data-science/assessment/academic-misconduct)[https://teaching.maths.ed.ac.uk/main/msc-students/msc-programmes/statistics/data-science/assessment/academic-misconduct].								
+
+Signature: 
+
+![](figures/signature.jpg){width=20%}
+
+Date: 1st July 2025
+

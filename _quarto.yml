@@ -2,17 +2,24 @@ project:
   type: book
 
 book:
-  title: "gene-expression"
-  author: "Diego Cesar Villa Almeyda"
-  date: "6/21/2025"
+  title: "Expression Profiling of Differentially Expressed Genes Under Stress Conditions and FLC1 Modulation in *Cryptococcus neoformans*"
+  author: 
+    - name: "Diego Cesar Villa Almeyda"
+      affiliations:
+        - name: "The University of Edinburgh"
+          department: "School of Mathematics"
+  date: "01 July 2025"
+  date-format: "MMMM, YYYY"
   chapters:
     - index.qmd
+    - summary.qmd
     - intro.qmd
     - methods.qmd
     - results.qmd
     - conclusions.qmd
     - references.qmd
     - appendix.qmd
+  
 
 bibliography: references.bib
 
@@ -23,9 +30,14 @@ format:
       - brand
   pdf:
     documentclass: scrreprt
+    keep-tex: true
     include-in-header:
       text: |
        \usepackage[font=small, labelfont={bf,small}, format=plain]{caption}
+    template-partials:
+      - before-body.tex
+    papersize: a4
+    geometry: top=2.5cm, bottom=2.5cm, left=3cm, right=3cm
     
 number-sections: true
 
